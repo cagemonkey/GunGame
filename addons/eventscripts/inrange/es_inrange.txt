@@ -1,0 +1,67 @@
+// In Range
+// by cagemonkey
+//
+// Syntax:
+//    inrange <var> <value1> <range> <value2>
+//
+// What it does:
+//    It checks to see if value1 is within +-<range> of value2 and returns 1 to <var> if the results are true, and 0 if the results are false
+//
+// Example:
+//    es_xsetinfo _tmp 0
+//    inrange _tmp 10 7 15
+// Results:
+//    _tmp = 1 because the difference between 10 and 15 is 5 which is less than or equalto 7
+//////
+// Example:
+//    es_xsetinfo _tmp 0
+//    es_xsetinfo _value1 10
+//    es_xsetinfo _value2 15
+//    es inrange _tmp server_var(_value1) 3 server_var(_value2)
+// Results:
+//    _tmp = 0 because the difference here is more than 3.
+//
+
+block load
+{
+	// Init vars
+	es_xsetinfo _ir_tmp 0
+	es_xsetinfo _ir_tmp2 0
+	es_xsetinfo _ir_var1 0
+	es_xsetinfo _ir_var2 0
+	es_xsetinfo _ir_range 0
+	es_xsetinfo _ir_var3 0
+	
+	// Create commands
+	es_xregcmd inrange inrange/inrange "Syntax: inrange <var> <value1> <range> <value2>"
+}
+
+block inrange
+{
+	es_xgetargc _ir_tmp
+	if (server_var(_ir_tmp) == 5) do
+	{
+		// Get vars from command
+		es_xgetargv _ir_var1 1
+		es_xgetargv _ir_var2 2
+		es_xgetargv _ir_range 3
+		es_xgetargv _ir_var3 4
+		
+		es_xmathparse _ir_tmp2 "abs(_ir_var2 - _ir_var3)"
+		if (server_var(_ir_tmp2) <= server_var(_ir_range)) do
+		{
+			es_setinfo server_var(_ir_var1) 1
+		}
+		else do
+		{
+			es_setinfo server_var(_ir_var1) 0
+		}
+	}
+	else do
+	{
+		es_dbgmsg 0 [InRange] -- Incorrect syntax.
+		es_dbgmsg 0 Syntax: inrange <var> <value1> <range> <value2>
+		es_dbgmsg 0 <var> stores the results of the test between <value1> and <value2>
+		es_dbgmsg 0 0=false, 1=true
+	}
+}

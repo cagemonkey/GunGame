@@ -1,0 +1,27 @@
+// GunGame Random Winner Songs
+// by cagemonkey
+// --------------------------- //
+// DO NOT EDIT BELOW THIS LINE //
+// ___________________________ //
+block load
+{
+	es_xsetinfo gg_rand_song 1
+	es_xsetinfo gg_songs 0
+	es_token gg_songs server_var(gg_songlist) 0 ,
+}
+
+event es_map_start
+{
+	es_xsetinfo gg_tmp_sound 0
+	es_rand gg_tmp 1 server_var(gg_songs)
+	es_token gg_tmp_sound server_var(gg_songlist) server_var(gg_tmp) ,
+	es_format gg_sound_winner "gungame/%1" server_var(gg_tmp_sound)
+	es_format gg_tmp_sound "sound/%1" server_var(gg_sound_winner)
+	es downloadable server_var(gg_tmp_sound)
+}
+
+block unload
+{
+	es_xsetinfo gg_rand_song 0
+	es_xsetinfo gg_sound_winner "music/HL2_song15.mp3"
+}

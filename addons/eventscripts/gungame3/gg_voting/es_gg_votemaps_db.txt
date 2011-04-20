@@ -1,0 +1,43 @@
+"gg_votemaps"
+{
+	"1"
+	{
+	   "name"     "de_dust"  
+	}
+	"2"
+	{
+	   "name"     "de_dust2" 
+	}
+	"3"
+	{
+	   "name"     "cs_office" 
+	}
+	"4"
+	{
+	   "name"     "cs_italy" 
+	}
+	"5"
+	{
+	   "name"     "de_aztec" 
+	}
+	"6"
+	{
+	   "name"     "cs_compound" 
+	}
+	"7"
+	{
+	   "name"     "cs_militia" 
+	}
+	"8"
+	{
+	   "name"     "cs_assault" 
+	}
+	"9"
+	{
+	   "name"     "de_train" 
+	}
+	"10"
+	{
+	   "name"     "de_port" 
+	}
+}

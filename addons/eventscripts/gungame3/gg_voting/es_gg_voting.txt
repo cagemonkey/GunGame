@@ -1,0 +1,203 @@
+//
+//============== es_gg_voting.txt ========================
+//
+//
+block load
+{	
+	es_xsetinfo gg_mapindex 1
+	es_xsetinfo gg_mapindex_temp 0
+	es_xsetinfo gg_vote_active 0
+	es_xsetinfo gg_vote_tally_check 0
+	es_xsetinfo gg_map_count 0
+	es_xsetinfo gg_nextmap 0
+	es_xsetinfo gg_temp 0
+	es_xkeygroupload gg_votemaps |gungame3/gg_voting 
+	es_xdoblock gungame3/gg_voting/load_mapcycle
+}
+
+block load_mapcycle
+{
+	es_xsetinfo gg_map_count 0
+	es_xforeachkey gg_current_index in gg_votemaps "es_xmath gg_map_count + 1"
+	es_xdoblock gungame3/gg_voting/get_next_map
+}
+
+block get_next_map
+{
+	  es_xmath gg_mapindex + 1 
+	  if (server_var(gg_mapindex) > server_var(gg_map_count)) then es_xsetinfo gg_mapindex 1
+	  es_keygetvalue gg_nextmap gg_votemaps server_var(gg_mapindex) name
+	  es_xexists gg_temp variable mani_nextmap
+	  if (server_var(gg_temp) == 1) do
+	  {
+	  	if (server_var(gg_nextmap) != 0) then ma_setnextmap server_var(gg_nextmap)
+	  }
+}
+
+block get_index
+{
+	es_keygetvalue gg_mapindex_temp gg_votemaps server_var(gg_findindex) name
+	if (server_var(gg_mapindex_temp) == server_var(eventscripts_currentmap)) do
+	{
+		es_setinfo gg_mapindex server_var(gg_findindex)
+		es_xdoblock gungame3/gg_voting/get_next_map
+	}
+}
+
+event es_map_start
+{
+	// Add sounds
+	downloadable sound/admin_plugin/actions/startyourvoting.mp3
+	downloadable sound/admin_plugin/actions/endofvote.mp3
+	
+	es_xsetinfo gg_vote_active 0
+	es_xsetinfo gg_vote_tally_check 0
+	es_xsetinfo gg_mapindex_temp 0
+	es_xforeachkey gg_findindex in gg_votemaps "es_xdoblock gungame3/gg_voting/get_index"
+	es_xexists gg_temp variable mani_nextmap
+	if (server_var(gg_temp) == 1) do
+	{
+		if (server_var(gg_nextmap) != 0) then ma_setnextmap server_var(gg_nextmap)
+	}
+}
+
+event player_say
+{
+	if (event_var(text) == "!nextmap") then es_xtell event_var(userid) #multi #green [GunGame] #default Next map is server_var(gg_nextmap)
+}
+
+block map_vote
+{
+	if (server_var(gg_allow_voting) = 1) do
+	{
+	if (server_var(gg_vote_active) == 0) do
+	 {
+		es_xsetinfo gg_map1 0
+		es_xsetinfo gg_map2 0
+		es_xsetinfo gg_map3 0
+		es_xsetinfo gg_map4 0
+		es_xsetinfo gg_map5 0
+		es_xsetinfo gg_vote_active 1
+		es_xsetinfo gg_linenumber 0
+		es_xsetinfo gg_mapname 0	
+		es_xsetinfo gg_loop_count 1
+		es_xsetinfo gg_mapindex_temp 0
+		es_xcopy gg_mapindex_temp gg_mapindex
+		popup delete map_vote_menu
+		popup create map_vote_menu
+		popup addline map_vote_menu "Choose a Map"
+		while "server_var(gg_loop_count) <= 5" "es_xdoblock gungame3/gg_voting/build_menu"
+		es_xcopy gg_mapindex gg_mapindex_temp
+		popup addline map_vote_menu "-----------------"
+		popup addline map_vote_menu "0. Cancel"
+		popup menuselectfb map_vote_menu gungame3/gg_voting/register_vote
+		popup select map_vote_menu 10 gungame3/gg_voting/menu_close
+		es popup timeout map_vote_menu view server_var(gg_vote_show_time)
+		foreach player gg_player #human "es_xdoblock gungame3/gg_voting/start_vote"
+		es_delayed server_var(gg_vote_show_time) es_xdoblock gungame3/gg_voting/tally_vote
+	 }
+	}
+}
+
+block start_vote
+{
+	es popup send map_vote_menu server_var(gg_player)
+	es_cexec server_var(gg_player) play admin_plugin/actions/startyourvoting.mp3
+}
+
+block build_menu
+{
+	es_xmath gg_linenumber + 1	  
+	es_keygetvalue gg_mapname gg_votemaps server_var(gg_mapindex) name
+	if (server_var(gg_mapname) != 0) do
+	{
+		es_format gg_menuline "->%1. %2" server_var(gg_linenumber) server_var(gg_mapname)
+		es popup addline map_vote_menu server_var(gg_menuline)
+		es popup menuvalue map_vote_menu gg_which_map server_var(gg_linenumber) server_var(gg_mapname)
+		es_xmath gg_loop_count + 1	
+		es_xmath gg_mapindex + 1 
+		if (server_var(gg_mapindex) > server_var(gg_map_count)) then es_xsetinfo gg_mapindex 1  
+	}	  
+}
+
+block menu_close
+{
+    //========= LEAVE EMPTY ==============
+}
+
+block register_vote
+{
+       if (server_var(_popup_choice) == 1) do
+		   {
+		        es_xmath gg_map1 + 1
+				es_setinfo gg_mapname1 server_var(gg_which_map)
+		   }
+		   if (server_var(_popup_choice) == 2) do
+		   {
+		        es_xmath gg_map2 + 1
+				es_setinfo gg_mapname2 server_var(gg_which_map)
+		   }
+		   if (server_var(_popup_choice) == 3) do
+		   {
+		        es_xmath gg_map3 + 1
+				es_setinfo gg_mapname3 server_var(gg_which_map)
+		   }
+		   if (server_var(_popup_choice) == 4) do 
+		   {
+		        es_xmath gg_map4 + 1
+				es_setinfo gg_mapname4 server_var(gg_which_map)
+		   }
+		   if (server_var(_popup_choice) == 5) do
+		   {
+		        es_xmath gg_map5 + 1
+				es_setinfo gg_mapname5 server_var(gg_which_map)
+		   }		   
+}
+
+block tally_vote
+{
+	if (server_var(gg_allow_voting) = 1) do
+	{
+	   if (server_var(gg_vote_tally_check) == 0) do
+	   {      
+	   	 es_xsetinfo gg_vote_tally_check 1
+		   foreach player gg_player #human "es popup unsendname map_vote_menu server_var(gg_player)"
+		   es_xsetinfo gg_loop_count 1
+		   es_xsetinfo gg_loop_max 5
+		   es_xsetinfo gg_var_copy 0
+		   es_xsetinfo gg_var_copy2 0
+		   es_xsetinfo gg_temp 0
+		   es_xsetinfo gg_map_choice 0
+		   es_xsetinfo gg_map_choice2 0
+		   while "server_var(gg_loop_count) <= server_var(gg_loop_max)" "es_xdoblock gungame3/gg_voting/tally_loop"
+		   es_cexec server_var(gg_player) play admin_plugin/actions/endofvote.mp3
+		   if (server_var(gg_nextmap) = 0) do
+		   {
+			   es_xmath gg_mapindex - 1
+			   es_xdoblock gungame3/gg_voting/get_next_map      
+		   }
+	    }
+	}
+}
+
+block tally_loop
+{
+    es_format gg_var_copy "gg_map%1" server_var(gg_loop_count)
+	  es_format gg_map_choice "gg_mapname%1" server_var(gg_loop_count)
+	  es_copy gg_var_copy2 server_var(gg_var_copy)	 	  
+	  if (server_var(gg_temp) < server_var(gg_var_copy2)) do
+	  {
+	     es_copy gg_map_choice2 server_var(gg_map_choice)
+		   es_xcopy gg_temp gg_var_copy2
+		   es_xcopy gg_nextmap gg_map_choice2
+	  }
+	  es_xmath gg_loop_count + 1
+}
+
+block unload
+{
+    es_xkeygroupdelete gg_votemaps
+	  popup unsendname map_vote_menu #all
+	  popup delete map_vote_menu
+	  es_xsetinfo gg_vote_setting 0
+}
