@@ -1,0 +1,68 @@
+// GunGame spawnpoint converter v3 to v4
+// by cagemonkey
+
+// Requires GunGame 4 is loaded first.
+
+block load
+{
+	es_xset gg_exists 0
+	es_xexists gg_exists script gungame4
+	ifx false(gg_exists) do
+	{
+		es_xload gungame4
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists script gungame4/addons/gg_deathmatch
+	ifx false(gg_exists) do
+	{
+		es_xload gungame4/addons/gg_deathmatch
+	}
+	
+	// init vars
+	es_xset tmp1 0
+	es_xset tmp2 0
+	es_xset tmp3 0
+	es_xset tmp_val 0
+	es_xset tmp_val2 0
+}
+
+event es_map_start
+{
+	es_keygroupload server_var(eventscripts_currentmap) |gungame3/gg_css_dm/spawnpoints
+	es_xset tmp_exists 0
+	es_exists tmp_exists key server_var(eventscripts_currentmap) points
+	ifx true(tmp_exists) do
+	{
+		es_xlog " "
+		es_xlog [GunGame] Converting spawnpoints to version 4 format...
+		es_foreachval tmp_val in server_var(eventscripts_currentmap) points "es_xdoblock gg4_converter/convert"
+		es_keydelete server_var(eventscripts_currentmap) points
+		es_keydelete server_var(eventscripts_currentmap) total
+		es_keygroupsave server_var(eventscripts_currentmap) |gungame3/gg_css_dm/spawnpoints
+		es_xlog [GunGame] Spawnpoint conversion complete
+		es_xlog " "
+	}
+	else do
+	{
+		es_xlog " "
+		es_log [GunGame] No spawnpoint conversion available for server_var(eventscripts_currentmap)
+		es_xlog " "
+	}
+	es_keygroupdelete server_var(eventscripts_currentmap)
+}
+
+block convert
+{
+	es_keygetvalue tmp_val2 server_var(eventscripts_currentmap) points server_var(tmp_val)
+	es_token tmp1 server_var(tmp_val2) 1 ,
+	es_token tmp2 server_var(tmp_val2) 2 ,
+	es_token tmp3 server_var(tmp_val2) 3 ,
+	
+	es_xformatqv gg_query "INSERT INTO spawnpoints ('loc_x', 'loc_y', 'loc_z', 'eye0', 'eye1') VALUES ('%1', '%2', '%3', 0, 0)" tmp1 tmp2 tmp3
+	es_sql query server_var(gg_last_map) server_var(gg_query)
+}
+
+block unload
+{
+	es_keygroupdelete server_var(eventscripts_currentmap)
+}

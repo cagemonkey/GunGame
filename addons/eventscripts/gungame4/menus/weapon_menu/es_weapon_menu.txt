@@ -1,0 +1,288 @@
+// Weapon menu
+// (c)2007 by GunGame Coding Team (cagemonkey,XE_Manup)
+//
+
+block load
+{
+   //gg_live gg_validweapons fields: validweapons
+   es_xset gg_validweapon_names "glock,usp,p228,deagle,fiveseven,elite,m3,xm1014,tmp,mac10,mp5navy,ump45,p90,galil,famas,ak47,scout,m4a1,sg552,aug,m249,hegrenade,knife,g3sg1,sg550,awp"
+   es_xsql query gg_live "DROP TABLE IF EXISTS gg_validweapons"
+   es_xsql query gg_live "CREATE TABLE IF NOT EXISTS gg_validweapons (validweapons varchar(9))"
+   es_token gg_levels server_var(gg_validweapon_names) 0 ,
+   es_xset gg_level_counter 0
+   while "server_var(gg_level_counter) < server_var(gg_levels)" "es_xdoblock gungame4/menus/weapon_menu/create_gg_validweapons"
+   es_xsql query gg_live "DROP TABLE IF EXISTS gg_weapons"
+   es_xsql query gg_live "CREATE TABLE IF NOT EXISTS gg_weapons (level int(2), weapon varchar(9), weapon_name varchar(16))"
+   es_token gg_levels server_var(gg_weapon_order) 0 ,
+   es_xset gg_level_counter 1
+   if (server_var(gg_levels) > 0) do
+   {
+      es_xlog " "
+      es_xlog [GunGame] Loading Weapons from 'gg_weapon_order' ...
+      es_xlog ----------------------------------------------------
+      es_log [GunGame] gg_weapon_order = server_var(gg_weapon_order)
+      es_xdoblock gungame4/menus/weapon_menu/create_weapon_list
+      es_xlog ----------------------------------------------------
+      es_xlog " "
+      es_xdoblock gungame4/menus/weapon_menu/create_weapon_popup
+   }
+   es_xsoon es_xunload gungame4/menus/weapon_menu
+}
+
+block create_weapon_list
+{
+   if ("," in server_var(gg_weapon_order)) do
+   {
+      es_token gg_tmp_weapon server_var(gg_weapon_order) server_var(gg_level_counter) ,
+      // Check for typos in gg_weapon_order
+      es_xformatqv gg_query "SELECT * FROM gg_validweapons WHERE validweapons = '%1'" gg_tmp_weapon
+      es_sql queryvalue gg_live gg_weapon_check server_var(gg_query)
+      if (server_var(gg_weapon_check) != server_var(gg_tmp_weapon)) do
+      {
+         es_log [GunGame] server_var(gg_tmp_weapon) is not a valid weapon: skipping
+         if (server_var(gg_level_counter) != 1) do
+         {
+            es_format gg_typo_format ",%1" server_var(gg_tmp_weapon)
+         }
+         else do
+         {
+            es_format gg_typo_format "%1" server_var(gg_tmp_weapon)
+         }
+         es_string gg_weapon_order replace server_var(gg_typo_format)
+         es_token gg_levels server_var(gg_weapon_order) 0 ,
+         es_xmath gg_level_counter - 1
+         if (server_var(gg_levels) > 0) do
+         {
+            if (server_var(gg_levels) != server_var(gg_level_counter)) do
+            {
+               es_xmath gg_level_counter + 1
+               es_xdoblock gungame4/menus/weapon_menu/create_weapon_list
+            }
+         }
+         else do
+         {
+            es_log [GunGame] There are no valid weapons listed in 'gg_weapon_order' ... Unloading GunGame
+            es_xsoon es_xunload gungame4
+         }
+      }
+      else do
+      // If there are no typos in gg_weapon_order, add the level and weapon to the SQL database gg_weapons
+      {
+         if (server_var(gg_level_counter) <= server_var(gg_levels)) do
+         {
+         	es_xformatv gg_tmp "weapon_%1" gg_tmp_weapon
+            es_xformatqv gg_query "INSERT INTO gg_weapons (level,weapon,weapon_name) VALUES('%1','%2','%3')" gg_level_counter gg_tmp_weapon gg_tmp
+            es_sql query gg_live server_var(gg_query)
+            es_xmath gg_level_counter + 1
+            if (server_var(gg_levels) >= server_var(gg_level_counter)) do
+            {
+               es_xdoblock gungame4/menus/weapon_menu/create_weapon_list
+            }
+            else do
+            {
+            	// Optional randomize code
+            	ifx true(gg_random_weapon_order) do
+            	{
+            		es_xsql query gg_live gg_rand_keygroup "SELECT weapon FROM gg_weapons WHERE weapon != 'hegrenade' AND weapon != 'knife' ORDER BY RANDOM()"
+            		es_xforeachkey gg_tmp_rand in gg_rand_keygroup "es_xdoblock gungame4/menus/weapon_menu/rand_weapon"
+            		es_xkeygroupdelete gg_rand_keygroup
+            		// Add knife and hegrenade back
+            		es_xsql queryvalue gg_live gg_tmp "SELECT COUNT(*) FROM gg_weapons"
+            		es_xsql queryvalue gg_live gg_tmp2 "SELECT COUNT(*) FROM gg_weapons WHERE weapon != 'hegrenade' AND weapon != 'knife'"
+            		es_xmathparse gg_tmp3 "gg_tmp - gg_tmp2"
+            		ifx true(gg_tmp3) do
+            		{
+            		    if (server_var(gg_tmp3) == 2) do
+            		    {
+            		        es_xmath gg_tmp2 + 1
+            		        es_log Level: server_var(gg_tmp2) Weapon: hegrenade
+	                        es_xformatqv gg_query "UPDATE gg_weapons SET level = '%1' WHERE weapon = 'hegrenade'" gg_tmp2
+	                        es_sql query gg_live server_var(gg_query)
+	                        es_xmath gg_tmp2 + 1
+            		        es_log Level: server_var(gg_tmp2) Weapon: knife
+	                        es_xformatqv gg_query "UPDATE gg_weapons SET level = '%1' WHERE weapon = 'knife'" gg_tmp2
+	                        es_sql query gg_live server_var(gg_query)
+	                    }
+	                    else do
+	                    {
+	                        es_xsql queryvalue gg_live gg_tmp4 "SELECT weapon FROM gg_weapons WHERE weapon = 'hegrenade'"
+	                        ifx true(gg_tmp4) do
+	                        {
+	                            es_xmath gg_tmp2 + 1
+            		            es_log Level: server_var(gg_tmp2) Weapon: hegrenade
+	                            es_xformatqv gg_query "UPDATE gg_weapons SET level = '%1' WHERE weapon = 'hegrenade'" gg_tmp2
+	                            es_sql query gg_live server_var(gg_query)
+	                        }
+	                        else do
+	                        {
+	                            es_xmath gg_tmp2 + 1
+            		            es_log Level: server_var(gg_tmp2) Weapon: knife
+	                            es_xformatqv gg_query "UPDATE gg_weapons SET level = '%1' WHERE weapon = 'knife'" gg_tmp2
+	                            es_sql query gg_live server_var(gg_query)
+	                        }
+	                    }
+	                }
+            		es_xlog [GunGame] Weapon order randomized.
+            	}
+            }
+         }
+      }
+   }
+}
+
+block unload
+{
+	es_xsql query gg_live "DROP TABLE IF EXISTS gg_validweapons"
+}
+
+block create_weapon_popup
+{
+   es_xset gg_weaponmenu_pages 0
+   es_xmathparse gg_weaponmenu_pagecount "rint((gg_levels*0.1)+0.4)"
+   es_set gg_level_counter server_var(gg_levels)
+   while "server_var(gg_weaponmenu_pages) < server_var(gg_weaponmenu_pagecount)" "es_xdoblock gungame4/menus/weapon_menu/build_weapon_popup"
+}
+
+block build_weapon_popup
+{
+   es_xmath gg_weaponmenu_pages + 1
+   if (server_var(gg_weaponmenu_pages) = 1) do
+   {
+      es_xset gg_menuname_format gg_weaponpage1
+      gg_popup exists gg_weaponpage1
+      ifx true(gg_exists) do
+      {
+      	gg_popup delete gg_weaponpage1
+      }
+      gg_popup create gg_weaponpage1
+      es_xformatv gg_menuline_format "GunGame Weapons:   (1/%1)" gg_weaponmenu_pagecount
+      es gg_popup addline gg_weaponpage1 server_var(gg_menuline_format)
+      es gg_popup addline gg_weaponpage1 "-------------------------------"
+      es_xsql query gg_live gg_keygroup "SELECT * FROM gg_weapons ORDER BY level ASC LIMIT 0, 10"
+      es_xset gg_keycount 0
+      es_xforeachkey gg_tempkey in gg_keygroup "es_xdoblock gungame4/menus/weapon_menu/format_weapon_popup"
+      if (server_var(gg_weaponmenu_pagecount) > 1) do
+      {
+         if (server_var(gg_weaponmenu_pagecount) > 2) do
+         {
+            gg_popup addline gg_weaponpage1 "-------------------------------"
+            gg_popup addline gg_weaponpage1 "->8. Last Page"
+            gg_popup addline gg_weaponpage1 "->9. Next Page"
+            gg_popup addline gg_weaponpage1 "0. Exit"
+            es_xformatv gg_menuname_format "gg_weaponpage%1" gg_weaponmenu_pagecount
+            es gg_popup submenu gg_weaponpage1 8 server_var(gg_menuname_format)
+            gg_popup submenu gg_weaponpage1 9 gg_weaponpage2
+            gg_popup setvalidkeys gg_weaponpage1 890
+         }
+         else do
+         {
+            gg_popup addline gg_weaponpage1 "-------------------------------"
+            gg_popup addline gg_weaponpage1 "->9. Next Page"
+            gg_popup addline gg_weaponpage1 "0. Exit"
+            gg_popup submenu gg_weaponpage1 9 gg_weaponpage2
+            gg_popup setvalidkeys gg_weaponpage1 90
+         }
+      }
+      else do
+      {
+         if (server_var(gg_keycount) < 10) do
+         {
+            es_xmathparse gg_blanklines "10-gg_keycount"
+            es_xset gg_keycount 0
+            es_xset gg_menuline_format " "
+            while "server_var(gg_keycount) < server_var(gg_blanklines)" "es_xmath gg_keycount + 1;es gg_popup addline server_var(gg_menuname_format) server_var(gg_menuline_format)"
+         }
+         gg_popup addline gg_weaponpage1 "-------------------------------"
+         gg_popup addline gg_weaponpage1 "0. Exit"
+         gg_popup setvalidkeys gg_weaponpage1 0
+      }
+      gg_popup cache gg_weaponpage1
+   }
+   else do
+   {
+      es_xformatv gg_menuname_format "gg_weaponpage%1" gg_weaponmenu_pages
+      es gg_popup exists server_var(gg_menuname_format)
+      ifx true(gg_exists) do
+      {
+      	es gg_popup delete server_var(gg_menuname_format)
+      }
+      es gg_popup create server_var(gg_menuname_format)
+      es_xformatv gg_menuline_format "GunGame Weapons:   (%1/%2)" gg_weaponmenu_pages gg_weaponmenu_pagecount
+      es gg_popup addline server_var(gg_menuname_format) server_var(gg_menuline_format)
+      es gg_popup addline server_var(gg_menuname_format) "-------------------------------"
+      es_xmathparse gg_limit_start "(gg_weaponmenu_pages*10)-10"
+      es_xformatqv gg_query "SELECT * FROM gg_weapons ORDER BY level ASC LIMIT %1, 10" gg_limit_start
+      es_sql query gg_live gg_keygroup server_var(gg_query)
+      es_xset gg_keycount 0
+      es_xforeachkey gg_tempkey in gg_keygroup "es_xdoblock gungame4/menus/weapon_menu/format_weapon_popup"
+      if (server_var(gg_weaponmenu_pages) = server_var(gg_weaponmenu_pagecount)) do
+      {
+         if (server_var(gg_keycount) < 10) do
+         {
+            es_xmathparse gg_blanklines "10-gg_keycount"
+            es_xset gg_keycount 0
+            es_xset gg_menuline_format " "
+            while "server_var(gg_keycount) < server_var(gg_blanklines)" "es_xmath gg_keycount + 1;es gg_popup addline server_var(gg_menuname_format) server_var(gg_menuline_format)"
+         }
+         es gg_popup addline server_var(gg_menuname_format) "-------------------------------"
+         es gg_popup addline server_var(gg_menuname_format) "->8. Previous Page"
+         es gg_popup addline server_var(gg_menuname_format) "->9. First Page"
+         es gg_popup addline server_var(gg_menuname_format) "0. Exit"
+         es gg_popup setvalidkeys server_var(gg_menuname_format) 890
+         es_xmath gg_weaponmenu_pages - 1
+         es_xformatv gg_submenuname_format "gg_weaponpage%1" gg_weaponmenu_pages
+         es_xmath gg_weaponmenu_pages + 1
+         es gg_popup submenu server_var(gg_menuname_format) 8 server_var(gg_submenuname_format)
+         es gg_popup submenu server_var(gg_menuname_format) 9 gg_weaponpage1
+      }
+      else do
+      {
+         es gg_popup addline server_var(gg_menuname_format) "-------------------------------"
+         es gg_popup addline server_var(gg_menuname_format) "->8. Previous Page"
+         es gg_popup addline server_var(gg_menuname_format) "->9. Next Page"
+         es gg_popup addline server_var(gg_menuname_format) "0. Exit"
+         es gg_popup setvalidkeys server_var(gg_menuname_format) 890
+         es_xmath gg_weaponmenu_pages - 1
+         es_xformatv gg_submenuname_format "gg_weaponpage%1" gg_weaponmenu_pages
+         es gg_popup submenu server_var(gg_menuname_format) 8 server_var(gg_submenuname_format)
+         es_xmath gg_weaponmenu_pages + 2
+         es_xformatv gg_submenuname_format "gg_weaponpage%1" gg_weaponmenu_pages
+         es_xmath gg_weaponmenu_pages - 1
+         es gg_popup submenu server_var(gg_menuname_format) 9 server_var(gg_submenuname_format)
+      }
+   es gg_popup cache server_var(gg_menuname_format)
+   }
+   es_xkeygroupdelete gg_keygroup
+}
+
+block format_weapon_popup
+{
+   es_xmath gg_keycount + 1
+   es_keygetvalue gg_weapon gg_keygroup server_var(gg_tempkey) weapon
+   es_keygetvalue gg_level gg_keygroup server_var(gg_tempkey) level
+   if (server_var(gg_level) < 10) do
+   {
+      es_xformatv gg_menuline_format "->%1.   %2" gg_level gg_weapon
+   }
+   else do
+   {
+      es_xformatv gg_menuline_format "->%1. %2" gg_level gg_weapon
+   }
+   es gg_popup addline server_var(gg_menuname_format) server_var(gg_menuline_format)
+}
+
+block create_gg_validweapons
+{
+   es_xmath gg_level_counter + 1
+   es_token gg_tmp_weapon server_var(gg_validweapon_names) server_var(gg_level_counter) ,
+   es_formatqv gg_query "INSERT INTO gg_validweapons (validweapons) VALUES('%1')" gg_tmp_weapon
+   es_sql query gg_live server_var(gg_query)
+}
+
+block rand_weapon
+{
+	es_keygetvalue gg_tmp_weapon gg_rand_keygroup server_var(gg_tmp_rand) weapon
+	es_log Level: server_var(gg_tmp_rand) Weapon: server_var(gg_tmp_weapon)
+	es_xformatqv gg_query "UPDATE gg_weapons SET level = '%1' WHERE weapon = '%2'" gg_tmp_rand gg_tmp_weapon
+	es_sql query gg_live server_var(gg_query)
+}

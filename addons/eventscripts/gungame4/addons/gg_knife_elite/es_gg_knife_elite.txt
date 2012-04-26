@@ -1,0 +1,77 @@
+// Knife Elite Addon
+// (c)2007 by GunGame Coding Team (cagemonkey,XE_Manup)
+//
+
+block load
+{
+	es_xdoblock gungame4/addons/gg_knife_elite/init
+	// Since gg_knife_elite overrides Turbo Mode, remove turbo mode if it is loaded
+	es_xset gg_exists 0
+	es_xexists gg_exists script gungame4/addons/gg_turbo_mode
+	ifx true(gg_turbo_mode) do
+	{
+		es_xunload gungame4/addons/gg_turbo_mode
+	}
+}
+
+block init
+{
+	es_xset gg_levelup 0 "Checks to see if a player has leveled up in a round, Location: es_gg_knife_elite"
+	es_xset gg_exists 0
+	es_xexists gg_exists command gg_knife_elite_strip
+	ifx false(gg_exists) do
+	{
+		es_xregcmd gg_knife_elite_strip "gungame4/addons/gg_knife_elite/strip" "Strip weapons from players for gg_knife_elite"
+	}
+}
+
+event gg_levelup
+{
+	ifx true(gg_live_round) do
+	{
+		es gg_knife_elite_strip event_var(userid) event_var(team)
+	}
+}
+
+event item_pickup
+{
+	ifx false(est_version) do
+	{
+		ifx true(gg_live_round) do
+		{
+			es gg_knife_elite_strip event_var(userid) event_var(es_userteam)
+		}
+	}
+}
+
+block strip
+{
+	es_xgetargv gg_userid 1
+	es_xgetargv gg_team 2
+	es_xformatv gg_query "SELECT levelup FROM gg_players WHERE userid = '%1'" gg_userid
+	es_sql queryvalue gg_live gg_levelup server_var(gg_query)
+	ifx true(gg_levelup) do
+	{
+		if (event_var(item) != "knife") do
+		{
+			if (event_var(item) != "c4") do
+			{
+				es_give server_var(gg_userid) player_weaponstrip
+				es_fire server_var(gg_userid) player_weaponstrip Strip 1
+				es_soon es_xgive server_var(gg_userid) item_assaultsuit
+				es_soon es_xgive server_var(gg_userid) weapon_knife
+				if (server_var(gg_bomber) = server_var(gg_userid)) then es_xdelayed .1 es_xgive server_var(gg_userid) weapon_c4 
+				if (server_var(gg_team) == 3) then es_xdelayed .1 es_xsetplayerprop server_var(gg_userid) CCSPlayer.m_bHasDefuser 1
+				es_delayed 0.01 es_xsexec server_var(gg_userid) use weapon_knife
+			}
+		}
+	}
+}
+
+event player_death
+{
+	ifx true(est_version) do
+	{
+		est_RemoveIdle weapon
+	}
+}

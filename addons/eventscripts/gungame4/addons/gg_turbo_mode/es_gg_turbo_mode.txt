@@ -1,0 +1,88 @@
+// Turbo Mode Addon
+// (c)2007 by GunGame Coding Team (cagemonkey,XE_Manup)
+//
+
+block load
+{
+	es_xregsaycmd !give "gungame4/addons/gg_turbo_mode/give_cmd" "Gives weapons"
+	es_xregclientcmd !give "gungame4/addons/gg_turbo_mode/give_cmd" "Gives weapons"
+}
+
+block unload
+{
+	es_xunregsaycmd !give
+	es_xunregclientcmd !give
+}
+
+event gg_levelup
+{
+	es_getplayerprop gg_tmp event_var(userid) "CCSPlayer.baseclass.pl.deadflag"
+	ifx false(gg_tmp) do
+	{
+		es_give event_var(userid) player_weaponstrip
+		es_fire event_var(userid) player_weaponstrip Strip 1
+		es_delayed 0.01 es_xgive event_var(userid) item_assaultsuit
+		es_delayed 0.01 es_xgive event_var(userid) weapon_knife
+		es_delayed 0.01 gg_equip event_var(userid) event_var(team)
+	}
+}
+
+
+block give_cmd
+{
+	ifx false(gg_warmup_started) do
+	{
+		es_xgetcmduserid gg_userid
+		es_xformatqv gg_query "SELECT give FROM gg_players WHERE userid = '%1'" gg_userid
+		es_sql queryvalue gg_live gg_tmp server_var(gg_query)
+		ifx false(gg_tmp) do
+		{
+			//removes weapons
+			es_getplayerteam gg_team server_var(gg_userid)
+			if (server_var(gg_team) > 1) do
+			{
+				es_getplayerprop gg_tmp2 server_var(gg_userid) "CCSPlayer.baseclass.pl.deadflag"
+				ifx false(gg_tmp2) do
+				{
+					es_xformatqv gg_query "UPDATE gg_players SET give = 1 WHERE userid = '%1'" gg_userid
+					es_sql query gg_live server_var(gg_query)
+	
+					// Get player's level and weapon from db
+					es gg_getlevel gg_level server_var(gg_userid)
+					es gg_getweapon gg_weapon server_var(gg_userid)
+					
+					if (server_var(gg_weapon) != "knife") do
+					{
+						if (server_var(gg_weapon) != "hegrenade") do
+						{
+							es_give server_var(gg_userid) player_weaponstrip
+							es_fire server_var(gg_userid) player_weaponstrip Strip 1
+		 					es_delayed 0.01 es_xgive server_var(gg_userid) item_assaultsuit
+							es_delayed 0.01 es_xgive server_var(gg_userid) weapon_knife
+							es_delayed 0.01 gg_equip server_var(gg_userid) server_var(gg_team)
+	 					}
+		 			}
+			 		
+		 			// Reset command in 10 seconds
+		 			es_delayed 10 gg_reset_cmd server_var(gg_userid)
+		 		}
+		 		else do
+		 		{
+			 		es_tell server_var(gg_userid) #green You cannot use that command now!!
+		 		}
+			}
+			else do
+			{
+				es_tell server_var(gg_userid) #green You cannot use that command now!!
+			}
+		}
+		else do
+		{
+			es_tell server_var(gg_userid) #green You cannot use that command now!!
+		}
+	}
+	else do
+	{
+		es_tell server_var(gg_userid) #green You cannot use that command now!!
+	}
+}

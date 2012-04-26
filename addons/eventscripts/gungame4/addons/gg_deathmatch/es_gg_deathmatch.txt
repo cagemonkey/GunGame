@@ -1,0 +1,475 @@
+// GunGame Deathmatch Addon
+// (c)2007 by GunGame Coding Team (cagemonkey,XE_Manup)
+//
+// requires ES_Tools v0.416+
+//
+
+block load
+{
+	// Load and unload plugins
+	es_xset gg_exists 0
+	es_xexists gg_exists script gungame4/addons/gg_knife_elite
+	ifx true(gg_exists) do
+	{
+		es_xunload gungame4/addons/gg_knife_elite
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists script gungame4/addons/gg_turbo_mode
+	ifx false(gg_exists) do
+	{
+		es_xload gungame4/addons/gg_turbo_mode
+	}
+	
+	// Spawnpoint table: id, userid, loc_x, loc_y, loc_z, eye0, eye1
+	es_xset gg_spawn_table "CREATE TABLE IF NOT EXISTS spawnpoints(id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, userid INTEGER DEFAULT 0, loc_x FLOAT NOT NULL, loc_y FLOAT NOT NULL, loc_z FLOAT NOT NULL, eye0 FLOAT NOT NULL, eye1 FLOAT NOT NULL)"
+	// Open spawnpoint database
+	ifx true(eventscripts_currentmap) do
+	{
+		es_set gg_last_map server_var(eventscripts_currentmap)
+		forcecase gg_last_map lower
+		es_sql open server_var(gg_last_map) |gungame4/addons/gg_deathmatch/spawnpoints
+		es_sql query server_var(gg_last_map) server_var(gg_spawn_table)
+	}
+	else do
+	{
+		// This has to be initialized on a conditional
+		es_xset gg_last_map 0 "Stores last map played to cleanup open databases"
+	}
+	
+	// Init vars
+	es_xset gg_eye0 0 "Eye angle 0, Location: gg_deathmatch"
+	es_xset gg_eye1 0 "Eye angle 1, Location: gg_deathmatch"
+	es_xset gg_dm_tmp 0
+	es_xset gg_dm_tmp2 0
+	es_xset gg_dm_tmp3 0
+	es_xset gg_dm_tmp4 0
+	es_xset gg_health 0
+	es_xset gg_armor 0
+	
+	// Init commands
+	es_xset gg_exists 0
+	es_xexists gg_exists command gg_dm_reset_player
+	ifx false(gg_exists) do
+	{
+		es_xregcmd gg_dm_reset_player gungame4/addons/gg_deathmatch/gg_dm_reset_player "Internal GunGame command"
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists command gg_respawn
+	ifx false(gg_exists) do
+	{
+		es_xregcmd gg_respawn gungame4/addons/gg_deathmatch/respawn_cmd "Internal GunGame command"
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists command gg_check_cmd
+	ifx false(gg_exists) do
+	{
+		es_xregcmd gg_check_cmd gungame4/addons/gg_deathmatch/gg_check_block "Internal GunGame command"
+	}
+	es_xregsaycmd !stuck "gungame4/addons/gg_deathmatch/stuck_cmd" "Unsticks players"
+	es_xregclientcmd !stuck "gungame4/addons/gg_deathmatch/stuck_cmd" "Unsticks players"
+	es_xregsaycmd !respawn "gungame4/addons/gg_deathmatch/respawn_cmd" "Respawns players"
+	
+	clientcmd create say dm_add "gungame4/addons/gg_deathmatch/add_spawn" "dm_add" #admin
+	clientcmd create say dm_del "gungame4/addons/gg_deathmatch/del_spawn" "dm_del" #admin
+	clientcmd create say dm_show "gungame4/addons/gg_deathmatch/show_spawn" "dm_show" #admin
+	clientcmd create say dm_ghost "gungame4/addons/gg_deathmatch/admin_ghost" "dm_ghost" #admin
+	
+	
+	es_xset gg_exists 0
+	es_xexists gg_exists command dm_add
+	ifx false(gg_exists) do
+	{
+		es_xregcmd dm_add gungame4/addons/gg_deathmatch/add_spawn "Adds a spawnpoint to the current map at your current location"
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists command dm_del
+	ifx false(gg_exists) do
+	{
+		es_xregcmd dm_del gungame4/addons/gg_deathmatch/del_spawn "Deletes spawnpoints recursively, optionally deletes all spawnpoints, dm_del [#all]"
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists command dm_show
+	ifx false(gg_exists) do
+	{
+		es_xregcmd dm_show gungame4/addons/gg_deathmatch/show_spawn "Shows a sprite at each spawnpoint location for <number> of seconds, dm_show [number]"
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists command dm_ghost
+	ifx false(gg_exists) do
+	{
+		es_xregcmd dm_ghost gungame4/addons/gg_deathmatch/admin_ghost "Makes user invincible and invisible to add spawnpoints to map"
+	}
+	
+	
+	// Disable objectives
+	es_xset gg_map_obj 0
+	
+	// Check spawnpoint protection and eventscripts_noisy
+	ifx true(gg_dm_remove_protect) do
+	{
+		refcount increment eventscripts_noisy
+	}
+}
+
+
+event es_map_start
+{
+	if (server_var(gg_last_map) != 0) do
+	{
+		// Make spawnpointx available again
+		es_sql query server_var(gg_last_map) "UPDATE spawnpoints SET userid = 0"
+		es_xsql close server_var(gg_last_map)
+	}
+	es_set gg_last_map server_var(eventscripts_currentmap)
+	forcecase gg_last_map lower
+	
+	// Load database
+	es_sql open server_var(gg_last_map) |gungame4/addons/gg_deathmatch/spawnpoints
+	es_sql query server_var(gg_last_map) server_var(gg_spawn_table)
+	es_sql query server_var(gg_last_map) "UPDATE spawnpoints SET userid = 0"
+	es_xsql close server_var(gg_last_map)
+}
+
+
+event player_spawn
+{
+	if (event_var(es_userteam) > 1) do
+	{
+		ifx true(gg_live_round) do
+		{
+			es_set gg_userid event_var(userid)
+			if (event_var(es_userteam) > 1) do
+			{
+				es_sql queryvalue server_var(gg_last_map) gg_exists "SELECT COUNT(*) FROM spawnpoints WHERE userid = 0"
+				ifx true(gg_exists) do
+				{
+					es_xdoblock gungame4/addons/gg_deathmatch/randspawn
+				}
+				else do
+				{
+					es_xdbgmsg 1 [GunGame] Not enough custom spawnpoints for map, using default map spawns
+				}
+			}
+			ifx true(gg_dm_spawn_protect) do
+			{
+				es est_god event_var(userid) 1
+				//5. est_effect [BeamRing] <player Filter> <delay> <model> <userid> <end index> <life> <width> <spread> <amplitude> <Red> <Green> <Blue> <Alpha> <speed>
+				//10. est_Effect [BeamRingPoint] <player Filter> <delay> <model> <x> <y> <z> <start radius> <end radius> <life> <width> <spread> <amplitude> <Red> <Green> <Blue> <Alpha> <speed>
+				//es est_Effect 10 #a 0 sprites/lgtning.vmt server_var(tmp123) server_var(tmp124) server_var(tmp125) 10 60 .5 4 10 0 255 255 128 255 5
+				es est_SetPlayerColor event_var(userid) 255 255 255 150 1
+				es_delayed server_var(gg_dm_spawn_protect) gg_dm_reset_player event_var(userid)
+			}
+		}
+	
+		// Set give values in database for query
+		es_xformatqv gg_query "UPDATE gg_players SET give = 0 WHERE userid = '%1'" gg_userid
+		es_sql query gg_live server_var(gg_query)
+	}
+}
+
+
+event player_death
+{
+	est_DeleteRagDolls
+	ifx true(gg_map_obj) do
+	{
+		est_Remove item_defuser
+	}
+	es_xdelayed .1 est_RemoveIdle weapon
+	
+	es_delayed server_var(gg_dm_spawntime) est_spawn event_var(userid)
+	
+	// Make spawnpoint available again
+	es_set gg_userid event_var(userid)
+	es_xformatqv gg_query "UPDATE spawnpoints SET userid = 0 WHERE userid = '%1'" gg_userid
+	es_sql query server_var(gg_last_map) server_var(gg_query)
+}
+
+
+event weapon_fire
+{
+	ifx true(gg_dm_remove_protect) do
+	{
+		es est_god event_var(userid) 0
+		es est_SetPlayerColor event_var(userid) 255 255 255 255 1
+	}
+}
+
+
+event player_team
+{
+	if (event_var(disconnect) == 0) do
+	{
+		if (event_var(team) < 2) do
+		{
+			// Make spawnpoint available again
+			es_set gg_userid event_var(userid)
+			es_xformatqv gg_query "UPDATE spawnpoints SET userid = 0 WHERE userid = '%1'" gg_userid
+			es_sql query server_var(gg_last_map) server_var(gg_query)
+		}
+		else do
+		{
+			es_delayed 10 gg_respawn event_var(userid)
+		}
+	}
+}
+
+
+event player_disconnect
+{
+	// Make spawnpoint available again
+	es_set gg_userid event_var(userid)
+	es_xformatqv gg_query "UPDATE spawnpoints SET userid = 0 WHERE userid = '%1'" gg_userid
+	es_sql query server_var(gg_last_map) server_var(gg_query)
+}
+
+
+block randspawn
+{
+	//Reset used spawnpoints
+	// Make spawnpoints available again
+	es_xformatqv gg_query "UPDATE spawnpoints SET userid = 0 WHERE userid = '%1'" gg_userid
+	es_sql query server_var(gg_last_map) server_var(gg_query)
+	
+	// Choose spawnpoint and respawn players
+	es_sql queryvalue server_var(gg_last_map) gg_tmp "SELECT id FROM spawnpoints WHERE userid = 0 ORDER BY RANDOM() LIMIT 1"
+	es_xformatqv gg_query "UPDATE spawnpoints SET userid = '%1' WHERE id = '%2'" gg_userid gg_tmp
+	es_sql query server_var(gg_last_map) server_var(gg_query)
+	es_xformatqv gg_query "SELECT loc_x, loc_y, loc_z, eye0, eye1 FROM spawnpoints WHERE id = '%1'" gg_tmp
+	es_sql query server_var(gg_last_map) gg_tmp_keygroup server_var(gg_query)
+	es_xkeygetvalue gg_user_x gg_tmp_keygroup 1 loc_x
+	es_xkeygetvalue gg_user_y gg_tmp_keygroup 1 loc_y
+	es_xkeygetvalue gg_user_z gg_tmp_keygroup 1 loc_z
+	es_xkeygetvalue gg_eye0 gg_tmp_keygroup 1 eye0
+	es_xkeygetvalue gg_eye1 gg_tmp_keygroup 1 eye1
+	es_xkeygroupdelete gg_tmp_keygroup
+	es_setpos server_var(gg_userid) server_var(gg_user_x) server_var(gg_user_y) server_var(gg_user_z)
+	es_setang server_var(gg_userid) server_var(gg_eye0) server_var(gg_eye1)
+}
+
+
+block gg_dm_reset_player
+{
+	es_xgetargv gg_userid 1
+	es est_god server_var(gg_userid) 0
+	es est_SetPlayerColor server_var(gg_userid) 255 255 255 255 1
+}
+
+
+block stuck_cmd
+{
+	es_xgetcmduserid gg_userid
+	es_getplayerteam gg_team server_var(gg_userid)
+	if (server_var(gg_team) > 1) do
+	{
+		es gg_getweapon gg_weapon server_var(gg_userid)
+		if (server_var(gg_weapon) != "hegrenade") do
+		{
+			es_xformatqv gg_query "SELECT give FROM gg_players WHERE userid = '%1'" gg_userid
+			es_sql queryvalue gg_live gg_tmp server_var(gg_query)
+			ifx false(gg_tmp) do
+			{
+				es_xformatqv gg_query "UPDATE gg_players SET give = 1 WHERE userid = '%1'" gg_userid
+				es_sql query gg_live server_var(gg_query)
+				es_xdoblock gungame4/addons/gg_deathmatch/rand_stuck
+			}
+			else do
+			{
+				es_tell server_var(gg_userid) #green You cannot use that command now!!
+			}
+		}
+		else do
+		{
+			es_tell server_var(gg_userid) #green You cannot use that command now!!
+		}
+	}
+	else do
+	{
+		es_tell server_var(gg_userid) #green You cannot use that command now!!
+	}
+}
+
+
+block rand_stuck
+{
+	es_xset gg_tmp 0
+	es_xrand gg_dm_tmp -200 200
+	es_xrand gg_dm_tmp2 -200 200
+	es inrange gg_tmp server_var(gg_dm_tmp) 50 0
+	es inrange gg_tmp server_var(gg_dm_tmp2) 50 0
+	ifx true(gg_tmp) do
+	{
+		es_xdoblock gungame4/addons/gg_deathmatch/rand_stuck
+	}
+	else do
+	{
+		es_getplayerlocation gg_user_x gg_user_y gg_user_z server_var(gg_userid)
+		es_format gg_tmp "%1,%2,170" server_var(gg_dm_tmp) server_var(gg_dm_tmp2)
+		es_setplayerprop server_var(gg_userid) "CCSPlayer.baseclass.localdata.m_vecBaseVelocity" server_var(gg_tmp)
+		es_delayed .6 gg_check_cmd server_var(gg_userid) server_var(gg_user_x) server_var(gg_user_y)
+	}
+}
+
+
+block gg_check_block
+{
+	es_xgetargv gg_userid 1
+	es_xgetargv gg_dm_tmp 2
+	es_xgetargv gg_dm_tmp2 3
+	es_getplayerlocation gg_user_x gg_user_y gg_user_z server_var(gg_userid)
+	es_xmathparse gg_dm_tmp3 "abs(gg_user_x - gg_dm_tmp)"
+	es_xmathparse gg_dm_tmp4 "abs(gg_user_y - gg_dm_tmp2)"
+	if (server_var(gg_dm_tmp3) <= 40) do
+	{
+		if (server_var(gg_dm_tmp4) <= 40) do
+		{
+			es playerget health gg_health server_var(gg_userid)
+			es playerget armor gg_armor server_var(gg_userid)
+			es est_spawn server_var(gg_userid) 1
+			es_delayed .25 playerset health server_var(gg_userid) server_var(gg_health)
+			es_delayed .25 playerset armor server_var(gg_userid) server_var(gg_armor)
+		}
+	}
+	es_delayed 2 gg_reset_cmd server_var(gg_userid)
+}
+
+
+block respawn_cmd
+{
+	es_xgetargv gg_userid 1
+	ifx false(gg_userid) do
+	{
+		es_xgetcmduserid gg_userid
+	}
+	es_getplayerprop gg_tmp server_var(gg_userid) "CCSPlayer.baseclass.pl.deadflag"
+	ifx true(gg_tmp) do
+	{
+		if (server_var(gg_live_round) == 1) do
+		{
+			es est_spawn server_var(gg_userid)
+		}
+	}
+}
+
+
+block add_spawn
+{
+	es_xgetcmduserid gg_userid
+	ifx false(gg_userid) do
+	{
+	    es_xgetargv gg_userid 1
+	}
+	es_getplayerlocation gg_user_x gg_user_y gg_user_z server_var(gg_userid)
+	es_getplayerprop gg_eye0 server_var(gg_userid) "CCSPlayer.m_angEyeAngles[0]"
+	es_getplayerprop gg_eye1 server_var(gg_userid) "CCSPlayer.m_angEyeAngles[1]"
+	es_xformatqv gg_query "INSERT INTO spawnpoints ('loc_x', 'loc_y', 'loc_z', 'eye0', 'eye1') VALUES ('%1', '%2', '%3', '%4', '%5')" gg_user_x gg_user_y gg_user_z gg_eye0 gg_eye1
+	es_sql query server_var(gg_last_map) server_var(gg_query)
+	
+	// Needs an est_effect command to show sprites to the admin
+	es_xmath gg_user_z + 50
+	es est_effect 11 server_var(gg_userid) 0 sprites/greenglow1.vmt server_var(gg_user_x) server_var(gg_user_y) server_var(gg_user_z) 5 1 255
+	es_tell server_var(gg_userid) #green ## Spawnpoint added
+}
+
+
+block del_spawn
+{
+	es_xgetargv gg_tmp 1
+	if (server_var(gg_tmp) == "#all") do
+	{
+		es_sql query server_var(gg_last_map) "DROP TABLE IF EXISTS spawnpoints"
+		es_sql query server_var(gg_last_map) server_var(gg_spawn_table)
+	}
+	else do
+	{
+		es_sql queryvalue server_var(gg_last_map) gg_tmp "SELECT MAX(id) FROM spawnpoints"
+		es_xformatqv gg_query "DELETE FROM spawnpoints WHERE id = '%1'" gg_tmp
+		es_sql query server_var(gg_last_map) server_var(gg_query)
+	}
+}
+
+
+block show_spawn
+{
+	// Needs an est_effect command to show sprites to the admin
+	es_xgetcmduserid gg_userid
+	ifx false(gg_userid) do
+	{
+	    es_xgetargv gg_userid 1
+	    es_xgetargv gg_tmp2 2
+	}
+	else do
+	{
+	    es_xgetargv gg_tmp2 1
+	}
+	es_sql queryvalue server_var(gg_last_map) gg_tmp "SELECT COUNT(id) FROM spawnpoints"
+	es_tell server_var(gg_userid) #multi #default Total spawnpoints: #green server_var(gg_tmp)
+	es_sql query server_var(gg_last_map) gg_tmp_keygroup "SELECT loc_x, loc_y, loc_z FROM spawnpoints"
+	es_foreachkey gg_tmp in gg_tmp_keygroup "es_xdoblock gungame4/addons/gg_deathmatch/show_sprite"
+	es_xkeygroupdelete gg_tmp_keygroup
+}
+
+
+block show_sprite
+{
+	es_keygetvalue gg_user_x gg_tmp_keygroup server_var(gg_tmp) loc_x
+	es_keygetvalue gg_user_y gg_tmp_keygroup server_var(gg_tmp) loc_y
+	es_keygetvalue gg_user_z gg_tmp_keygroup server_var(gg_tmp) loc_z
+	es_xmath gg_user_z + 50
+	ifx true(gg_tmp2) do
+	{
+		es est_effect 11 server_var(gg_userid) 0 sprites/blueglow1.vmt server_var(gg_user_x) server_var(gg_user_y) server_var(gg_user_z) server_var(gg_tmp2) 1 255
+	}
+	else do
+	{
+		es est_effect 11 server_var(gg_userid) 0 sprites/blueglow1.vmt server_var(gg_user_x) server_var(gg_user_y) server_var(gg_user_z) 10 1 255
+	}
+}
+
+
+block admin_ghost
+{
+	es_xgetcmduserid gg_userid
+	ifx false(gg_userid) do
+	{
+	    es_xgetargv gg_userid 1
+	}
+	es_getplayerprop gg_tmp server_var(gg_userid) "CBasePlayer.m_lifeState"
+	if (server_var(gg_tmp) == 1) do
+	{
+		es est_spawn server_var(gg_userid) 1
+	}
+	else do
+	{
+   	es_setplayerprop server_var(gg_userid) CBasePlayer.m_lifeState 1
+   	es_setplayerprop server_var(gg_userid) CCSPlayer.baseclass.baseclass.baseclass.baseclass.baseclass.baseclass.m_CollisionGroup 2
+   	es est_StripPlayer server_var(gg_userid)
+	}
+}
+
+
+block unload
+{
+	// Close spawnpiont database
+	if (server_var(gg_last_map) != 0) do
+	{
+		// Make spawnpointx available again
+		es_sql query server_var(gg_last_map) "UPDATE spawnpoints SET userid = 0"
+		es_xsql close server_var(gg_last_map)
+		es_xset gg_last_map 0
+	}
+	
+	// Reset refcount for eventscripts_noisy
+	ifx true(gg_dm_remove_protect) do
+	{
+		refcount decrement eventscripts_noisy
+	}
+	
+	es_xunregsaycmd !stuck
+	es_xunregclientcmd !stuck
+	es_xunregsaycmd !respawn
+	es_xunregsaycmd dm_add
+	es_xunregsaycmd dm_del
+	es_xunregsaycmd dm_show
+	es_xunregsaycmd dm_ghost
+}

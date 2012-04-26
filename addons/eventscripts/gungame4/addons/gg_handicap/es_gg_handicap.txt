@@ -1,0 +1,47 @@
+// Handicap addon
+// (c)2007 by GunGame Coding Team (cagemonkey,XE_Manup)
+//
+
+block load
+{
+	// Init vars
+	es_xset gg_average 0
+	
+	ifx true(gg_handicap_update) do
+	{
+		crontab */2 * * * * "es_xdoblock gungame4/addons/gg_handicap/handicap_update" gg_handicap 1
+	}
+}
+
+event player_activate
+{
+	es_set gg_userid event_var(userid)
+	es_xsql queryvalue gg_live gg_average "SELECT AVG(level) FROM gg_players"
+	es_xmath gg_average int
+	es gg_getlevel gg_user_lvl event_var(userid)
+	es_xformatqv gg_query "SELECT afk_x FROM gg_players WHERE userid = '%1'" gg_userid
+	es_sql queryvalue gg_live gg_tmp server_var(gg_query)
+	if (server_var(gg_tmp) == 1) do
+	{
+		if (server_var(gg_user_lvl) < server_var(gg_average)) do
+		{
+			es_xformatqv gg_query "UPDATE gg_players SET level = '%1' WHERE userid = '%2'" gg_average gg_userid
+			es_sql query gg_live server_var(gg_query)
+		}
+	}
+}
+
+block handicap_update
+{
+	es_sql queryvalue gg_live gg_average "SELECT AVG(level) FROM gg_players"
+	es_xmath gg_average int
+	es_xformatqv gg_query "UPDATE gg_players SET level = '%1' WHERE level < '%2'" gg_average gg_average
+	es_sql query gg_live server_var(gg_query)
+	es_msg #multi #green [#lightgreenHANDICAP#green]#default all players are now level#lightgreen server_var(gg_average)#default or higher.
+	es_cexec_all playgamesound server_var(gg_sound_handicap)
+}
+
+block unload
+{
+	crontab del gg_handicap
+}

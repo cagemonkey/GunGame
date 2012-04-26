@@ -1,0 +1,41 @@
+// Unlimited Grenades Addon
+// (c)2007 by GunGame Coding Team (cagemonkey,XE_Manup)
+//
+
+block load
+{
+	es_xset gg_exists 0
+	es_xexists gg_exists script gungame4/addons/gg_earn_nade
+	ifx true(gg_exists) do
+	{
+		es_xunload gungame4/addons/gg_earn_nade
+	}
+	ifx true(gg_unl_grenades) do
+	{
+		ifx true(gg_xtra_grenades) do
+		{
+			es_xset gg_xtra_grenades 0
+		}
+	}
+}
+
+event hegrenade_detonate
+{
+	if (event_var(es_userteam) > 1) do
+	{
+		es_give event_var(userid) weapon_hegrenade
+	}
+}
+
+block unload
+{
+	ifx true(gg_xtra_grenades) do
+	{
+		es_xset gg_exists 0
+		es_xexists gg_exists script gungame4/addons/gg_earn_nade
+		ifx false(gg_exists) do
+		{
+			es_xload gungame4/addons/gg_earn_nade
+		}
+	}
+}

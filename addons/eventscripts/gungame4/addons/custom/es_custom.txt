@@ -1,0 +1,31 @@
+// GunGame Custom Addons Loader
+//   Load and unload all of your custom addons from this file.
+//
+
+block load
+{
+	// Load your custom addons here.
+	
+	// Single bullet awps EXAMPLE script
+	//es_xload gungame4/addons/custom/gg_awp_bullet
+	
+	// Gives players the option to buy levels
+	//es_xload gungame4/addons/custom/gg_buy_level
+	
+	// Auto reload when players get a kill
+	//es_xload gungame4/addons/custom/gg_reload
+}
+
+block unload
+{
+	// Unload your custom addons here.
+	
+	// Single bullet awps EXAMPLE script
+	//es_xunload gungame4/addons/custom/gg_awp_bullet
+	
+	// Gives players the option to buy levels
+	//es_xunload gungame4/addons/custom/gg_buy_level
+	
+	// Auto reload when players get a kill
+	//es_xunload gungame4/addons/custom/gg_reload
+}

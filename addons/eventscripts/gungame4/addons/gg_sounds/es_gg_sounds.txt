@@ -1,0 +1,172 @@
+// GunGame Sounds Addon
+// (c)2007 by GunGame Coding Team (cagemonkey,XE_Manup)
+//
+
+block load
+{
+	// Init vars
+	es_xset gg_tmp_sound 0
+	
+	// Load sounds into downloadables
+	if ("gungame" in server_var(gg_sound_welcome)) do
+	{
+		es_xformatv gg_tmp_sound "sound/%1" gg_sound_welcome
+		es downloadable server_var(gg_tmp_sound)
+	}
+	if ("gungame" in server_var(gg_sound_knife)) do
+	{
+		es_xformatv gg_tmp_sound "sound/%1" gg_sound_knife
+		es downloadable server_var(gg_tmp_sound)
+	}
+	if ("gungame" in server_var(gg_sound_nade)) do
+	{
+		es_xformatv gg_tmp_sound "sound/%1" gg_sound_nade
+		es downloadable server_var(gg_tmp_sound)
+	}
+	if ("gungame" in server_var(gg_sound_levelup)) do
+	{
+		es_xformatv gg_tmp_sound "sound/%1" gg_sound_levelup
+		es downloadable server_var(gg_tmp_sound)
+	}
+	if ("gungame" in server_var(gg_sound_leveldown)) do
+	{
+		es_xformatv gg_tmp_sound "sound/%1" gg_sound_leveldown
+		es downloadable server_var(gg_tmp_sound)
+	}
+	if ("gungame" in server_var(gg_sound_levelsteal)) do
+	{
+		es_xformatv gg_tmp_sound "sound/%1" gg_sound_levelsteal
+		es downloadable server_var(gg_tmp_sound)
+	}
+	if ("gungame" in server_var(gg_sound_triple)) do
+	{
+		es_xformatv gg_tmp_sound "sound/%1" gg_sound_triple
+		es downloadable server_var(gg_tmp_sound)
+	}
+	if ("gungame" in server_var(gg_sound_handicap)) do
+	{
+		es_xformatv gg_tmp_sound "sound/%1" gg_sound_handicap
+		es downloadable server_var(gg_tmp_sound)
+	}
+	ifx false(gg_rand_song) do
+	{
+		if ("gungame" in server_var(gg_sound_winner)) do
+		{
+			es_format gg_tmp_sound "sound/%1" server_var(gg_sound_winner)
+			es downloadable server_var(gg_tmp_sound)
+		}
+	}
+	else do
+	{
+		es_token gg_tmp server_var(gg_songlist) 0 ,
+		es_rand gg_tmp2 1 server_var(gg_tmp)
+		es_token gg_tmp_sound server_var(gg_songlist) server_var(gg_tmp2) ,
+		es_format gg_sound_winner "gungame/%1" server_var(gg_tmp_sound)
+		es_format gg_tmp_sound "sound/%1" server_var(gg_sound_winner)
+		es downloadable server_var(gg_tmp_sound)
+	}
+}
+
+
+event es_map_start
+{
+	// Load sounds into downloadables
+	if ("gungame" in server_var(gg_sound_welcome)) do
+	{
+		es_xformatv gg_tmp_sound "sound/%1" gg_sound_welcome
+		es downloadable server_var(gg_tmp_sound)
+	}
+	if ("gungame" in server_var(gg_sound_knife)) do
+	{
+		es_xformatv gg_tmp_sound "sound/%1" gg_sound_knife
+		es downloadable server_var(gg_tmp_sound)
+	}
+	if ("gungame" in server_var(gg_sound_nade)) do
+	{
+		es_xformatv gg_tmp_sound "sound/%1" gg_sound_nade
+		es downloadable server_var(gg_tmp_sound)
+	}
+	if ("gungame" in server_var(gg_sound_levelup)) do
+	{
+		es_xformatv gg_tmp_sound "sound/%1" gg_sound_levelup
+		es downloadable server_var(gg_tmp_sound)
+	}
+	if ("gungame" in server_var(gg_sound_leveldown)) do
+	{
+		es_xformatv gg_tmp_sound "sound/%1" gg_sound_leveldown
+		es downloadable server_var(gg_tmp_sound)
+	}
+	if ("gungame" in server_var(gg_sound_levelsteal)) do
+	{
+		es_xformatv gg_tmp_sound "sound/%1" gg_sound_levelsteal
+		es downloadable server_var(gg_tmp_sound)
+	}
+	if ("gungame" in server_var(gg_sound_triple)) do
+	{
+		es_xformatv gg_tmp_sound "sound/%1" gg_sound_triple
+		es downloadable server_var(gg_tmp_sound)
+	}
+	if ("gungame" in server_var(gg_sound_handicap)) do
+	{
+		es_xformatv gg_tmp_sound "sound/%1" gg_sound_handicap
+		es downloadable server_var(gg_tmp_sound)
+	}
+	ifx false(gg_rand_song) do
+	{
+		if ("gungame" in server_var(gg_sound_winner)) do
+		{
+			es_format gg_tmp_sound "sound/%1" server_var(gg_sound_winner)
+			es downloadable server_var(gg_tmp_sound)
+		}
+	}
+	else do
+	{
+		es_token gg_tmp server_var(gg_songlist) 0 ,
+		es_rand gg_tmp2 1 server_var(gg_tmp)
+		es_token gg_tmp_sound server_var(gg_songlist) server_var(gg_tmp2) ,
+		es_format gg_sound_winner "gungame/%1" server_var(gg_tmp_sound)
+		es_format gg_tmp_sound "sound/%1" server_var(gg_sound_winner)
+		es downloadable server_var(gg_tmp_sound)
+	}
+}
+
+
+event player_team
+{
+    ifx true(gg_sound_welcome) do
+	{
+	    if (event_var(team) > 1) do
+	    {
+			es_playsound event_var(userid) server_var(gg_sound_welcome) 1.0
+		}
+	}
+}
+
+
+event gg_levelup
+{
+	es_playsound event_var(userid) server_var(gg_sound_levelup) 1.0
+	//es_cexec event_var(userid) playgamesound server_var(gg_sound_levelup)
+	
+	if (event_var(new_level) == server_var(gg_leader_lvl)) do
+	{
+	    es_xformatqv gg_query "SELECT weapon FROM gg_weapons WHERE level = '%1'" gg_leader_lvl
+		es_sql queryvalue gg_live gg_leader_wpn server_var(gg_query)
+		if (server_var(gg_leader_wpn) == "hegrenade") do
+		{
+			// Play nade sound here
+			es_cexec_all playgamesound server_var(gg_sound_nade)
+		}
+		if (server_var(gg_leader_wpn) == "knife") do
+		{
+			// Play knife sound here
+			es_cexec_all playgamesound server_var(gg_sound_knife)
+		}
+	}
+}
+
+event gg_leveldown
+{
+	es_playsound event_var(userid) server_var(gg_sound_leveldown) 1.0
+	//es_cexec event_var(userid) playgamesound server_var(gg_sound_leveldown)
+}

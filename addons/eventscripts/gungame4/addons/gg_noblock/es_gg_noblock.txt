@@ -1,0 +1,8 @@
+// No Block Addon
+// (c)2007 by GunGame Coding Team (cagemonkey,XE_Manup)
+//
+
+event player_spawn
+{
+	es_setplayerprop event_var(userid) CCSPlayer.baseclass.baseclass.baseclass.baseclass.baseclass.baseclass.m_CollisionGroup 2
+}

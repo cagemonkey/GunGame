@@ -1,0 +1,30 @@
+// Earn hegrenade addon
+// (c)2007 by GunGame Coding Team (cagemonkey,XE_Manup)
+//
+
+event player_death
+{
+    //es gg_getweapon gg_attacker_wpn event_var(attacker)
+    if (server_var(gg_attacker_wpn) == "hegrenade") do
+    {
+        // Skip everything if the warmup round is going
+	    ifx false(gg_warmup_started) do
+	    {
+    		// Get attacker level and weapon name
+		    if (event_var(attacker) != 0) do
+		    {
+    			// Kill checks
+			    if (event_var(es_userteam) != event_var(es_attackerteam)) do
+			    {
+    				ifx false(gg_user_afk) do
+				    {
+						if (event_var(weapon) != "hegrenade") do
+						{
+							es_give event_var(attacker) weapon_hegrenade
+						}
+					}
+				}
+			}
+		}
+	}
+}

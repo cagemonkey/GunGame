@@ -1,0 +1,63 @@
+// GunGame4 Stats Output Addon
+// (c)2007 by GunGame Coding Team (cagemonkey,XE_Manup)
+//
+
+block load
+{
+	// Init vars
+	es_xset gg_oldescape 0
+}
+
+event gg_levelup
+{
+	// Log level up for hlstats users
+	es_xcopy gg_oldescape eventscripts_escapechars
+	if (event_var(team) > 2) do
+	{
+		es_xset gg_tmp "CT"
+	}
+	else do
+	{
+		es_xset gg_tmp "TERRORIST"
+	}
+	es_format gg_tmp2 "%1<%2><%3><%4>" event_var(name) event_var(userid) event_var(steamid) server_var(gg_tmp)
+	es_xset eventscripts_escapechars "; {}()':l"
+	es_logq server_var(gg_tmp2) triggered gg_levelup
+	es_xcopy eventscripts_escapechars gg_oldescape
+}
+
+event gg_leveldown
+{
+	// Log level down for hlstats users
+	es_xcopy gg_oldescape eventscripts_escapechars
+	if (event_var(team) > 2) do
+	{
+		es_xset gg_tmp "CT"
+	}
+	else do
+	{
+		es_xset gg_tmp "TERRORIST"
+	}
+	es_format gg_tmp2 "%1<%2><%3><%4>" event_var(name) event_var(userid) event_var(steamid) server_var(gg_tmp)
+	es_xsetinfo eventscripts_escapechars "; {}()':l"
+	es_logq server_var(gg_tmp2) triggered gg_leveldown
+	es_xcopy eventscripts_escapechars gg_oldescape
+}
+
+event gg_win
+{
+	// Log winner for hlstats users
+	es_xcopy gg_oldescape eventscripts_escapechars
+	if (event_var(team) > 2) do
+	{
+		es_xset gg_tmp "CT"
+	}
+	else do
+	{
+		es_xset gg_tmp "TERRORIST"
+	}
+	es_format gg_tmp2 "%1<%2><%3><%4>" event_var(name) event_var(userid) event_var(steamid) server_var(gg_tmp)
+	es_xset eventscripts_escapechars "; {}()':w"
+	es_logq server_var(gg_tmp2) triggered gg_win
+	es_xcopy eventscripts_escapechars gg_oldescape
+}

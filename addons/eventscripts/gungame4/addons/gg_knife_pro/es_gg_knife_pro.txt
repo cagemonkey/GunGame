@@ -1,0 +1,181 @@
+// Knife Pro Addon
+// (c)2007 by GunGame Coding Team (cagemonkey,XE_Manup)
+//
+
+block load
+{
+	es_xdoblock gungame4/addons/gg_knife_pro/init
+}
+
+block init
+{
+	es_xset gg_victim_lvl 0 "Used to retrieve the victim's level, Location: es_gg_knife_pro"
+	es_xset gg_oldescape 0 "Used for stats"
+}
+
+event player_death
+{
+    if (event_var(weapon) = "knife") do
+    {
+        ifx false(gg_warmup_started) do
+	    {
+    		if (event_var(es_userteam) != event_var(es_attackerteam)) do
+		    {
+				//es gg_getweapon gg_attacker_wpn event_var(attacker)
+				if (server_var(gg_attacker_wpn) != "knife") do
+				{
+					ifx false(gg_user_afk) do
+					{
+						es gg_getlevel gg_victim_lvl event_var(userid)
+						ifx true(gg_knife_pro_limit) do
+						{
+							if (server_var(gg_victim_lvl) > 1) do
+							{
+								es gg_getlevel gg_attacker_lvl event_var(attacker)
+								es_xmathparse gg_tmp "gg_attacker_lvl - gg_victim_lvl"
+								if (server_var(gg_tmp) <= server_var(gg_knife_pro_limit)) do
+								{
+									if (server_var(gg_attacker_wpn) != "hegrenade") do
+									{
+										// Initialize event gg_levelup
+										es_xmathparse gg_tmp "gg_attacker_lvl + 1"
+										es_xevent initialize gg_levelup
+										es_event setint gg_levelup userid event_var(attacker)
+										es_event setint gg_levelup victim event_var(userid)
+										es_event setstring gg_levelup steamid event_var(es_attackersteamid)
+										es_event setint gg_levelup old_level server_var(gg_attacker_lvl)
+										es_event setint gg_levelup new_level server_var(gg_tmp)
+										es_event setint gg_levelup team event_var(es_attackerteam)
+										es_event setstring gg_levelup name event_var(es_attackername)
+										es_event setstring gg_levelup victimname event_var(es_username)
+										es_xevent fire gg_levelup
+										es_delayed .02 es_xcexec event_var(attacker) play server_var(gg_sound_levelsteal)
+									}
+									else do
+									{
+										es_menu 5 event_var(attacker) "You are on hegrenade\n You cannot skip this level by knifing"
+									}
+
+									// Initialize event gg_leveldown
+									es_xmathparse gg_tmp "gg_victim_lvl - 1"
+									es_xevent initialize gg_leveldown
+									es_event setint gg_leveldown userid event_var(userid)
+									es_event setint gg_leveldown attacker event_var(attacker)
+									es_event setstring gg_leveldown steamid event_var(es_steamid)
+									es_event setint gg_leveldown old_level server_var(gg_victim_lvl)
+									es_event setint gg_leveldown new_level server_var(gg_tmp)
+									es_event setint gg_leveldown team event_var(es_userteam)
+									es_event setstring gg_leveldown name event_var(es_username)
+									es_event setstring gg_leveldown attackername event_var(es_attackername)
+									es_xevent fire gg_leveldown
+									es_format gg_format "#lightgreen %1 #defaultstole a level from#lightgreen %2" event_var(es_attackername) event_var(es_username)
+									es_msg #multi server_var(gg_format)
+									
+									// ***** gg_stats
+									es_xset gg_exists 0
+									es_xexists gg_exists script gungame4/addons/gg_stats
+									ifx true(gg_exists) do
+									{
+										// Log level steal for hlstats users
+										es_xcopy gg_oldescape eventscripts_escapechars
+										if (event_var(es_attackerteam) > 2) do
+										{
+											es_xset gg_tmp "CT"
+										}
+										else do
+										{
+											es_xset gg_tmp "TERRORIST"
+										}
+										es_format gg_tmp2 "%1<%2><%3><%4>" event_var(es_attackername) event_var(attacker) event_var(es_attackersteamid) server_var(gg_tmp)
+										es_xset eventscripts_escapechars "; {}()':l"
+										es_logq server_var(gg_tmp2) triggered gg_levelsteal
+										es_xcopy eventscripts_escapechars gg_oldescape
+									}
+								}
+								else do
+								{
+									// Victim was too low
+									es_format gg_tmp "%1 is more than %2 levels below you\n You could not steal!!" event_var(es_username) server_var(gg_knife_pro_limit)
+									es_menu 5 event_var(attacker) server_var(gg_tmp)
+									es_format gg_tmp "%1 is more than %2 levels above you\n You did not lose a level" event_var(es_attackername) server_var(gg_knife_pro_limit)
+									es_menu 5 event_var(userid) server_var(gg_tmp)
+								}
+							}
+							else do
+							{
+								// Victim was on level one
+								es_format gg_tmp "%1 is on level 1\n You could not steal!!" event_var(es_username)
+								es_menu 5 event_var(attacker) server_var(gg_tmp)
+								es_format gg_tmp "You are on level 1\n %1 could not steal!!" event_var(es_attackername)
+								es_menu 5 event_var(userid) server_var(gg_tmp)
+							}
+						}
+						else do
+						{
+							if (server_var(gg_victim_lvl) > 1) do
+							{
+								if (server_var(gg_attacker_wpn) != "hegrenade") do
+								{
+									// Initialize event gg_levelup
+									es_xmathparse gg_tmp "gg_attacker_lvl + 1"
+									es_xevent initialize gg_levelup
+									es_event setint gg_levelup userid event_var(attacker)
+									es_event setint gg_levelup victim event_var(userid)
+									es_event setstring gg_levelup steamid event_var(es_attackersteamid)
+									es_event setint gg_levelup old_level server_var(gg_attacker_lvl)
+									es_event setint gg_levelup new_level server_var(gg_tmp)
+									es_event setint gg_levelup team event_var(es_attackerteam)
+									es_event setstring gg_levelup name event_var(es_attackername)
+									es_event setstring gg_levelup victimname event_var(es_username)
+									es_xevent fire gg_levelup
+									es_format gg_format "#lightgreen %1 #defaultstole a level from#lightgreen %2" event_var(es_attackername) event_var(es_username)
+									es_msg #multi server_var(gg_format)
+									es_delayed .02 es_xcexec event_var(attacker) play server_var(gg_sound_levelsteal)
+								}
+								else do
+								{
+									es_menu 5 event_var(attacker) "You are on hegrenade\n You cannot skip this level by knifing"
+								}
+								// Initialize event gg_leveldown
+								es_xmathparse gg_tmp "gg_victim_lvl - 1"
+								es_xevent initialize gg_leveldown
+								es_event setint gg_leveldown userid event_var(userid)
+								es_event setint gg_leveldown attacker event_var(attacker)
+								es_event setstring gg_leveldown steamid event_var(es_steamid)
+								es_event setint gg_leveldown old_level server_var(gg_victim_lvl)
+								es_event setint gg_leveldown new_level server_var(gg_tmp)
+								es_event setint gg_leveldown team event_var(es_userteam)
+								es_event setstring gg_leveldown name event_var(es_username)
+								es_event setstring gg_leveldown attackername event_var(es_attackername)
+								es_xevent fire gg_leveldown
+								
+								// ***** gg_stats
+								es_xset gg_exists 0
+								es_xexists gg_exists script gungame4/addons/gg_stats
+								ifx true(gg_exists) do
+								{
+									// Log level steal for hlstats users
+									es_xcopy gg_oldescape eventscripts_escapechars
+									if (event_var(es_attackerteam) == 2) then es_xset gg_tmp "TERRORIST"
+									if (event_var(es_attackerteam) == 3) then es_xset gg_tmp "CT"
+									es_format gg_tmp2 "%1<%2><%3><%4>" event_var(es_attackername) event_var(attacker) event_var(es_attackersteamid) server_var(gg_tmp)
+									es_xset eventscripts_escapechars "; {}()':l"
+									es_logq server_var(gg_tmp2) triggered gg_levelsteal
+									es_xcopy eventscripts_escapechars gg_oldescape
+								}
+							}
+							else do
+							{
+								// Victim was on level one
+								es_format gg_tmp "%1 is on level 1\n You could not steal!!" event_var(es_username)
+								es_menu 5 event_var(attacker) server_var(gg_tmp)
+								es_format gg_tmp "You are on level 1\n %1 could not steal!!" event_var(es_attackername)
+								es_menu 5 event_var(userid) server_var(gg_tmp)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}

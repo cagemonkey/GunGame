@@ -1,0 +1,231 @@
+// Top Menu
+// (c)2007 by GunGame Coding Team (cagemonkey,XE_Manup)
+//
+
+block load
+{
+	gg_popup exists gg_toppage1
+	ifx true(gg_exists) do
+	{
+		gg_popup uncache gg_toppage1
+		gg_popup uncache gg_toppage2
+		gg_popup uncache gg_toppage3
+		gg_popup uncache gg_toppage4
+		gg_popup uncache gg_toppage5
+		gg_popup delete gg_toppage1
+		gg_popup delete gg_toppage2
+		gg_popup delete gg_toppage3
+		gg_popup delete gg_toppage4
+		gg_popup delete gg_toppage5
+	}
+	// Default to top50
+	es_xset gg_menu_pages 0
+	es_sql queryvalue gg_database gg_top_total "SELECT COUNT(*) FROM gg_players"
+	if (server_var(gg_top_total) > 50) then es_xset gg_top_total 50
+	es_xmathparse gg_menu_pagecount "rint((gg_top_total*0.1)+0.4)"
+	es_xset gg_rank 0
+	while "server_var(gg_menu_pages) < server_var(gg_menu_pagecount)" "es_xdoblock gungame4/menus/top_menu/build_top_popup"
+}
+
+
+event es_map_start
+{
+	gg_popup exists gg_toppage1
+	ifx true(gg_exists) do
+	{
+		gg_popup uncache gg_toppage1
+		gg_popup uncache gg_toppage2
+		gg_popup uncache gg_toppage3
+		gg_popup uncache gg_toppage4
+		gg_popup uncache gg_toppage5
+		gg_popup delete gg_toppage1
+		gg_popup delete gg_toppage2
+		gg_popup delete gg_toppage3
+		gg_popup delete gg_toppage4
+		gg_popup delete gg_toppage5
+	}
+	// Default to top50
+	es_xset gg_menu_pages 0
+	es_sql queryvalue gg_database gg_top_total "SELECT COUNT(*) FROM gg_players"
+	if (server_var(gg_top_total) > 50) then es_xset gg_top_total 50
+	es_xmathparse gg_menu_pagecount "rint((gg_top_total*0.1)+0.4)"
+	es_xset gg_rank 0
+	while "server_var(gg_menu_pages) < server_var(gg_menu_pagecount)" "es_xdoblock gungame4/menus/top_menu/build_top_popup"
+}
+
+
+block build_top_popup
+{
+   es_xmath gg_menu_pages + 1
+   if (server_var(gg_menu_pages) = 1) do
+   {
+      es_xset gg_menuname_format gg_toppage1
+      gg_popup exists gg_toppage1
+      ifx true(gg_exists) do
+      {
+      	gg_popup delete gg_toppage1
+      }
+      gg_popup create gg_toppage1
+      es_xformatv gg_menuline_format "GunGame Top%1:   (1/%2)" gg_top_total gg_menu_pagecount
+      es gg_popup addline gg_toppage1 server_var(gg_menuline_format)
+      es gg_popup addline gg_toppage1 "-------------------------------"
+      
+      if (server_var(gg_top_total) < 10) do
+      {
+      	es_xformatqv gg_query "SELECT name,wins FROM gg_players ORDER BY wins DESC LIMIT %1" gg_top_total
+      	es_sql query gg_database gg_keygroup server_var(gg_query)
+      }
+      else do
+      {
+      	es_xsql query gg_database gg_keygroup "SELECT name,wins FROM gg_players ORDER BY wins DESC,name LIMIT 10"
+      }
+      es_xset gg_keycount 0
+      es_xforeachkey gg_tempkey in gg_keygroup "es_xdoblock gungame4/menus/top_menu/format_top_popup"
+      if (server_var(gg_menu_pagecount) > 1) do
+      {
+         if (server_var(gg_menu_pagecount) > 2) do
+         {
+            gg_popup addline gg_toppage1 "-------------------------------"
+            gg_popup addline gg_toppage1 "->8. Last Page"
+            gg_popup addline gg_toppage1 "->9. Next Page"
+            gg_popup addline gg_toppage1 "0. Exit"
+            es_xformatv gg_menuname_format "gg_toppage%1" gg_menu_pagecount
+            es gg_popup submenu gg_toppage1 8 server_var(gg_menuname_format)
+            gg_popup submenu gg_toppage1 9 gg_toppage2
+            gg_popup setvalidkeys gg_toppage1 890
+         }
+         else do
+         {
+            gg_popup addline gg_toppage1 "-------------------------------"
+            gg_popup addline gg_toppage1 "->9. Next Page"
+            gg_popup addline gg_toppage1 "0. Exit"
+            gg_popup submenu gg_toppage1 9 gg_toppage2
+            gg_popup setvalidkeys gg_toppage1 90
+         }
+      }
+      else do
+      {
+         if (server_var(gg_keycount) < 10) do
+         {
+            es_xmathparse gg_blanklines "10-gg_keycount"
+            es_xset gg_keycount 0
+            es_xset gg_menuline_format " "
+            while "server_var(gg_keycount) < server_var(gg_blanklines)" "es_xmath gg_keycount + 1;es gg_popup addline server_var(gg_menuname_format) server_var(gg_menuline_format)"
+         }
+         gg_popup addline gg_toppage1 "-------------------------------"
+         gg_popup addline gg_toppage1 "0. Exit"
+         gg_popup setvalidkeys gg_toppage1 0
+      }
+      gg_popup cache gg_toppage1
+   }
+   else do
+   {
+      es_xformatv gg_menuname_format "gg_toppage%1" gg_menu_pages
+      es gg_popup exists server_var(gg_menuname_format)
+      ifx true(gg_exists) do
+      {
+      	es gg_popup delete server_var(gg_menuname_format)
+      }
+      es gg_popup create server_var(gg_menuname_format)
+      es_xformatv gg_menuline_format "GunGame Top%1:   (%2/%3)" gg_top_total gg_menu_pages gg_menu_pagecount
+      es gg_popup addline server_var(gg_menuname_format) server_var(gg_menuline_format)
+      es gg_popup addline server_var(gg_menuname_format) "-------------------------------"
+      es_xmathparse gg_limit_start "(gg_menu_pages*10)-10"
+      es_xformatqv gg_query "SELECT wins,name FROM gg_players ORDER BY wins DESC,name LIMIT 10 OFFSET %1" gg_limit_start
+      es_sql query gg_database gg_keygroup server_var(gg_query)
+      es_xset gg_keycount 0
+      es_xforeachkey gg_tempkey in gg_keygroup "es_xdoblock gungame4/menus/top_menu/format_top_popup"
+      if (server_var(gg_menu_pages) = server_var(gg_menu_pagecount)) do
+      {
+         if (server_var(gg_keycount) < 10) do
+         {
+            es_xmathparse gg_blanklines "10 - gg_keycount"
+            es_xset gg_keycount 0
+            es_xset gg_menuline_format " "
+            while "server_var(gg_keycount) < server_var(gg_blanklines)" "es_xmath gg_keycount + 1;es gg_popup addline server_var(gg_menuname_format) server_var(gg_menuline_format)"
+         }
+         es gg_popup addline server_var(gg_menuname_format) "-------------------------------"
+         es gg_popup addline server_var(gg_menuname_format) "->8. Previous Page"
+         es gg_popup addline server_var(gg_menuname_format) "->9. First Page"
+         es gg_popup addline server_var(gg_menuname_format) "0. Exit"
+         es gg_popup setvalidkeys server_var(gg_menuname_format) 890
+         es_xmath gg_menu_pages - 1
+         es_xformatv gg_submenuname_format "gg_toppage%1" gg_menu_pages
+         es_xmath gg_menu_pages + 1
+         es gg_popup submenu server_var(gg_menuname_format) 8 server_var(gg_submenuname_format)
+         es gg_popup submenu server_var(gg_menuname_format) 9 gg_toppage1
+      }
+      else do
+      {
+         es gg_popup addline server_var(gg_menuname_format) "-------------------------------"
+         es gg_popup addline server_var(gg_menuname_format) "->8. Previous Page"
+         es gg_popup addline server_var(gg_menuname_format) "->9. Next Page"
+         es gg_popup addline server_var(gg_menuname_format) "0. Exit"
+         es gg_popup setvalidkeys server_var(gg_menuname_format) 890
+         es_xmath gg_menu_pages - 1
+         es_xformatv gg_submenuname_format "gg_toppage%1" gg_menu_pages
+         es gg_popup submenu server_var(gg_menuname_format) 8 server_var(gg_submenuname_format)
+         es_xmath gg_menu_pages + 2
+         es_xformatv gg_submenuname_format "gg_toppage%1" gg_menu_pages
+         es_xmath gg_menu_pages - 1
+         es gg_popup submenu server_var(gg_menuname_format) 9 server_var(gg_submenuname_format)
+      }
+   es gg_popup cache server_var(gg_menuname_format)
+   }
+   es_xkeygroupdelete gg_keygroup
+}
+
+
+block format_top_popup
+{
+	es_xmath gg_rank + 1
+	if (server_var(gg_rank) <= server_var(gg_top_total)) do
+	{
+		es_xmath gg_keycount + 1
+		es_keygetvalue gg_wins gg_keygroup server_var(gg_tempkey) wins
+		es_keygetvalue gg_username gg_keygroup server_var(gg_tempkey) name
+		es_xstring gg_username replace "\" "/"
+		if (server_var(gg_rank) < 10) do
+		{
+			if (server_var(gg_wins) < 10) do
+			{
+				es_xformatv gg_menuline_format "->%1.    %2    %3" gg_rank gg_wins gg_username
+			}
+			else do
+			{
+				es_xformatv gg_menuline_format "->%1.    %2  %3" gg_rank gg_wins gg_username
+			}
+		}
+		else do
+		{
+			if (server_var(gg_wins) < 10) do
+			{
+				es_xformatv gg_menuline_format "->%1.  %2    %3" gg_rank gg_wins gg_username
+			}
+			else do
+			{
+				es_xformatv gg_menuline_format "->%1.  %2  %3" gg_rank gg_wins gg_username
+			}
+		}
+		es gg_popup addline server_var(gg_menuname_format) server_var(gg_menuline_format)
+	}
+}
+
+
+block unload
+{
+	gg_popup exists gg_toppage1
+	ifx true(gg_exists) do
+	{
+		gg_popup uncache gg_toppage1
+		gg_popup uncache gg_toppage2
+		gg_popup uncache gg_toppage3
+		gg_popup uncache gg_toppage4
+		gg_popup uncache gg_toppage5
+		gg_popup delete gg_toppage1
+		gg_popup delete gg_toppage2
+		gg_popup delete gg_toppage3
+		gg_popup delete gg_toppage4
+		gg_popup delete gg_toppage5
+	}
+}

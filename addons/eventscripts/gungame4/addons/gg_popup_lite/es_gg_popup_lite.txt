@@ -1,0 +1,509 @@
+// (c)2007 by GunGame Coding Team (cagemonkey,XE_Manup)
+// This is a "light" version of GodJonez's popup adapted specifically for the use
+//	of GunGame 4. All credit for this idea goes to GodJonez for the original
+//	concept and creation of the original "popup" script. In no way does this
+//	script alter or affect the original "popup" script, nor does it claim to
+//	be any better.
+
+block load
+{
+   es_xloadevents declare addons/eventscripts/gungame4/events/es_gungame_events.res
+   es_xsql open gg_popup_database ":memory:"
+   es_xsql query gg_popup_database "CREATE TABLE gg_popup_cache (menuname varchar(50), menutext vachar(600))"
+   es_xsql query gg_popup_database "CREATE TABLE gg_popup_players (userid vachar(4), active_menuname varchar(50))"
+   es_xsql query gg_popup_database "CREATE TABLE gg_popup_valid_commands (valid_commands varchar(12))"
+   es_xsql query gg_popup_database "CREATE TABLE gg_created_popups (popups varchar(50), validkeys varchar(10))"
+   es_xset gg_valid_popup_commands "create,delete,send,exists,unsendname,addline,submenu,setvalidkeys,timeout,cache,uncache"
+   es foreach token gg_popup_command server_var(gg_valid_popup_commands) , "es_xdoblock gungame4/addons/gg_popup_lite/add_valid_commands"
+   es_xset gg_exists 0
+   es_xexists gg_exists command gg_popup
+   ifx false(gg_exists) do
+   {
+      es_xregcmd gg_popup gungame4/addons/gg_popup_lite/sort_command
+   }
+   // Add connected players to db
+   es_xdoblock gungame4/addons/gg_popup_lite/gg_popup_player_activate
+}
+
+
+block unload
+{
+   es_xsql close gg_popup_database
+}
+
+event gg_popup_select
+{
+   if (event_var(submenu) != 0) do
+   {
+      es gg_popup send server_var(gg_popup_submenuname) 0 event_var(userid)
+   }
+}
+
+event es_client_command
+{
+   if (event_var(command) = menuselect) do
+   {
+      es_format gg_query "SELECT active_menuname FROM gg_popup_players WHERE userid=%1" event_var(userid)
+      es_sql queryvalue gg_popup_database gg_active_menuname server_var(gg_query)
+      ifx true(gg_active_menuname) do
+      {
+         es_format gg_query "UPDATE gg_popup_players SET active_menuname = '0' WHERE userid= %1" event_var(userid)
+         es_sql query gg_popup_database server_var(gg_query)
+         es_set gg_selection event_var(commandstring)
+         es_xformatqv gg_query "SELECT submenu FROM %1 WHERE submenu_select='%2'" gg_active_menuname gg_selection
+         es_sql queryvalue gg_popup_database gg_popup_submenuname server_var(gg_query)
+         ifx true(gg_popup_submenuname) do
+         {
+            es_xevent initialize gg_popup_select
+            es_event setint gg_popup_select userid event_var(userid)
+            es_event setint gg_popup_select selection event_var(commandstring)
+            es_event setstring gg_popup_select menu server_var(gg_active_menuname)
+            es_event setstring gg_popup_select submenu server_var(gg_popup_submenuname)
+            es_xevent fire gg_popup_select
+            es gg_popup send server_var(gg_popup_submenuname) 0 event_var(userid)
+         }
+         else do
+         {
+            es_xevent initialize gg_popup_select
+            es_event setint gg_popup_select userid event_var(userid)
+            es_event setint gg_popup_select selection event_var(commandstring)
+            es_event setstring gg_popup_select menu server_var(gg_active_menuname)
+            es_xevent setstring gg_popup_select submenu 0
+            es_xevent fire gg_popup_select
+         }
+      }
+   }
+}
+
+event player_activate
+{
+   es_set gg_userid event_var(userid)
+   es_format gg_query "SELECT userid FROM gg_popup_players WHERE userid=%1" event_var(userid)
+   es_sql queryvalue gg_popup_database gg_exists server_var(gg_query)
+   ifx false(gg_exists) do
+   {
+      es_format gg_query "INSERT INTO gg_popup_players (userid,active_menuname) VALUES(%1,'0')" event_var(userid)
+      es_sql query gg_popup_database server_var(gg_query)
+   }
+   else do
+   {
+      es_format gg_query "UPDATE gg_popup_players SET active_menuname='0' WHERE userid=%1" event_var(userid)
+      es_sql query gg_popup_database server_var(gg_query)
+   }
+}
+
+block gg_popup_player_activate
+{
+   foreach player gg_userid #human "es_xdoblock gungame4/addons/gg_popup_lite/add_to_gg_popup_players"
+}
+
+block add_to_gg_popup_players
+{
+   es_xformatv gg_query "INSERT INTO gg_popup_players (userid,active_menuname) VALUES(%1,'0')" gg_userid
+   es_sql query gg_popup_database server_var(gg_query)
+}
+
+event player_disconnect
+{
+   es_format gg_query "DELETE FROM gg_popup_players WHERE userid = %1" event_var(userid)
+   es_sql query gg_popup_database server_var(gg_query)
+}
+
+block add_valid_commands
+{
+   es_xformatqv gg_query "INSERT INTO gg_popup_valid_commands (valid_commands) VALUES('%1')" gg_popup_command
+   es_sql query gg_popup_database server_var(gg_query)
+}
+
+block sort_command
+{
+   es_xgetargc gg_popup_argc
+   if (server_var(gg_popup_argc) > 1) do
+   {
+      es_xgetargv gg_popup_command 1
+      es_xformatqv gg_query "SELECT valid_commands FROM gg_popup_valid_commands WHERE valid_commands='%1'" gg_popup_command
+      es_sql queryvalue gg_popup_database gg_exists server_var(gg_query)
+      ifx true(gg_exists) do
+      {
+         es_xformatv gg_format "gungame4/addons/gg_popup_lite/%1" gg_popup_command
+         es_doblock server_var(gg_format)
+      }
+      else do
+      {
+         es_xformatv gg_format "[GunGame PopUp]: '%1' is not a valid command for gg_popup" gg_popup_command
+         esnq es_xdbgmsg 0 server_var(gg_format)
+         es_xdbgmsg 0 [GunGame PopUp]: gg_popup [create | delete | send | exists | unsendname | addline | submenu | validkeys]
+      }
+   }
+   else do
+   {
+      es_xdbgmsg 0 [GunGame PopUp]: gg_popup [create | delete | send | exists | unsendname | addline | submenu | validkeys]
+   }
+}
+
+// gg_popup create <menu name>
+block create
+{
+   es_xgetargc gg_popup_argc
+   if (server_var(gg_popup_argc) = 3) do
+   {
+      es_xgetargv gg_popup_menuname 2
+      es gg_popup exists server_var(gg_popup_menuname)
+      ifx false(gg_exists) do
+      {
+         es_xformatqv gg_query "INSERT INTO gg_created_popups (popups,validkeys) VALUES('%1','-')" gg_popup_menuname
+         es_sql query gg_popup_database server_var(gg_query)
+         es_xformatqv gg_query "CREATE TABLE '%1' (lines varchar(150), submenu varchar(50), submenu_select int(1))" gg_popup_menuname
+         es_sql query gg_popup_database server_var(gg_query)
+      }
+      else do
+      {
+         es_xformatv gg_format "[GunGame PopUp]: Unable to create the popup '%1' - The popup already exists!" gg_popup_menuname
+         esnq es_xdbgmsg 0 server_var(gg_format)
+      }
+   }
+   else do
+   {
+      es_xdbgmsg 0 [GunGame PopUp]: gg_popup create <menu name>
+   }
+}
+
+// gg_popup exists <menu name>
+block exists
+{
+   es_xgetargc gg_popup_argc
+   if (server_var(gg_popup_argc) = 3) do
+   {
+      es_xgetargv gg_popup_menuname 2
+      es_xformatqv gg_query "SELECT popups FROM gg_created_popups WHERE popups='%1'" gg_popup_menuname
+      es_sql queryvalue gg_popup_database gg_exists server_var(gg_query)
+   }
+   else do
+   {
+      es_xdbgmsg 0 [GunGame PopUp]: gg_popup exists <menu name>
+   }
+}
+
+// gg_popup addline <menu name> <"text">
+block addline
+{
+   es_xgetargc gg_popup_argc
+   if (server_var(gg_popup_argc) > 3) do
+   {
+      es_xgetargv gg_popup_menuname 2
+      es gg_popup exists server_var(gg_popup_menuname)
+      ifx true (gg_exists) do
+      {
+         es_xgetargv gg_popup_line 3
+         es_xformatqv gg_query "INSERT INTO '%1' (lines) VALUES('%2')" gg_popup_menuname gg_popup_line
+         es_sql query gg_popup_database server_var(gg_query)
+      }
+      else do
+      {
+         es_xformatv gg_format "[GunGame PopUp]: Unable to add a line the popup '%1' - The popup does not exist!" gg_popup_menuname
+         esnq es_xdbgmsg 0 server_var(gg_format)
+      }
+   }
+   else do
+   {
+      es_xdbgmsg 0 [GunGame PopUp]: gg_popup addline <menu name> <"text">
+   }
+}
+
+// gg_popup delete <menu name>
+block delete
+{
+   es_xgetargc gg_popup_argc
+   if (server_var(gg_popup_argc) = 3) do
+   {
+      es_xgetargv gg_popup_menuname 2
+      es gg_popup exists server_var(gg_popup_menuname)
+      ifx true (gg_exists) do
+      {
+         es_xformatqv gg_query "SELECT userid FROM gg_popup_players WHERE active_menuname='%1'" gg_popup_menuname
+         es_sql query gg_popup_database gg_junk_keygroup server_var(gg_query)
+         es_foreachkey gg_keytemp in gg_junk_keygroup "es_xdoblock gungame4/addons/gg_popup_lite/unsend"
+         es_xkeygroupdelete gg_junk_keygroup
+         es_xformatqv gg_query "UPDATE gg_popup_players SET active_menuname = '0' WHERE active_menuname = '%1'" gg_popup_menuname
+         es_sql query gg_popup_database server_var(gg_query)
+         es_xformatqv gg_query "DELETE FROM gg_created_popups WHERE popups='%1';DROP TABLE '%1';DELETE FROM gg_popup_cache WHERE menuname='%1'" gg_popup_menuname
+         es_sql query gg_popup_database server_var(gg_query)
+      }
+      else do
+      {
+         es_xformatv gg_format "[GunGame PopUp]: Unable to delete the popup '%1' - The popup does not exist!" gg_popup_menuname
+         esnq es_xdbgmsg 0 server_var(gg_format)
+      }
+   }
+   else do
+   {
+      es_xdbgmsg 0 [GunGame PopUp]: gg_popup delete <menu name>
+   }
+}
+
+block unsend
+{
+   es_keygetvalue gg_userid gg_junk_keygroup server_var(gg_keytemp) userid
+   es_xformatqv gg_query "BEGIN TRANSACTION;UPDATE gg_popup_players SET active_menuname = '0' WHERE userid = %2;END TRANSACTION" gg_popup_menuname gg_userid
+   es_sql query gg_popup_database server_var(gg_query)
+   es gg_popup send server_var(gg_popup_menuname) 1 server_var(gg_userid)
+}
+
+// internal gg_popup to delete a popup from active_menuname
+//gg_popup timeout <menu name> <userid>
+block timeout
+{
+   es_xgetargv gg_popup_menuname 2
+   es_xgetargv gg_userid 3
+   es_xformatqv gg_query "SELECT active_menuname FROM gg_popup_players WHERE userid = '%1'" gg_userid
+   es_sql queryvalue gg_popup_database gg_active_menuname server_var(gg_query)
+   if (server_var(gg_active_menuname) = server_var(gg_popup_menuname)) do
+   {
+      es_xformatqv gg_query "UPDATE gg_popup_players SET active_menuname = '0' WHERE userid = '%1'" gg_userid
+      es_sql query gg_popup_database server_var(gg_query)
+   }
+}
+
+// gg_popup send <menu name> <duration> <userid | #all | #t | #ct | #spec | #un | #dead | #alive | #human | #bot>
+block send
+{
+   es_xgetargc gg_popup_argc
+   if (server_var(gg_popup_argc) = 5) do
+   {
+      es_xgetargv gg_popup_menuname 2
+      es gg_popup exists server_var(gg_popup_menuname)
+      ifx true(gg_exists) do
+      {
+         // Check for duration
+         es_xgetargv gg_popup_duration 3
+         // Check to who the popup is being sent too
+         es_xgetargv gg_userid 4
+         if ("#" notin server_var(gg_userid)) do
+         {
+            es_xset gg_exists 0
+            es_exists gg_exists userid server_var(gg_userid)
+            ifx true(gg_exists) do
+            {
+               es_xdoblock gungame4/addons/gg_popup_lite/send_menu
+            }
+            else do
+            {
+               es_xformatv gg_format "[GunGame PopUp]: Unable to send the popup '%1' to '%2' - The specified userid '%2' does not exist!" gg_popup_menuname gg_userid
+               esnq es_xdbgmsg 0 server_var(gg_format)
+            }
+         }
+         else do
+         {
+            es_xdoblock gungame4/addons/gg_popup_lite/send_menu
+         }
+      }
+      else do
+      {
+         es_xformatv gg_format "[GunGame PopUp]: Unable to send the popup '%1' - The popup does not exist!" gg_popup_menuname
+         esnq es_xdbgmsg 0 server_var(gg_format)
+      }
+   }
+   else do
+   {
+      es_xdbgmsg [GunGame PopUp]: gg_popup send <menu name> <duration> <userid | #all | #t | #ct | #spec | #un | #dead | #alive | #human | #bot>
+   }
+}
+
+block format_menu
+{
+   es_xmath gg_keycount + 1
+   es_keygetvalue gg_popup_linetext gg_popup_menu server_var(gg_keycount) lines
+   if (server_var(gg_keycount) = 1) do
+   {
+      es_formatv gg_menu_format "%1" gg_popup_linetext
+   }
+   else do
+   {      
+      es_formatv gg_menu_format "%1\n%2" gg_menu_format gg_popup_linetext      
+   }
+}
+
+block send_menu
+{
+   es_xset gg_menu_format 0
+   es_xformatqv gg_query "SELECT menutext FROM gg_popup_cache WHERE menuname='%1'" gg_popup_menuname
+   es_sql queryvalue gg_popup_database gg_menu_format server_var(gg_query)
+   ifx false(gg_menu_format) do
+   {
+      es_xformatqv gg_query "SELECT lines FROM '%1' WHERE lines<>'NULL'" gg_popup_menuname
+      es_sql query gg_popup_database gg_popup_menu server_var(gg_query)
+      es_xset gg_keycount 0
+      es_foreachkey gg_tempkey in gg_popup_menu "es_xdoblock gungame4/addons/gg_popup_lite/format_menu"
+      es_xkeygroupdelete gg_popup_menu
+   }
+   // Check to see if "valid menuselect keys" exist
+   es_xformatqv gg_query "SELECT validkeys FROM gg_created_popups WHERE popups='%1'" gg_popup_menuname
+   es_sql queryvalue gg_popup_database gg_popup_menuselectkeys server_var(gg_query)
+   // Send the popup
+   if ("#" in server_var(gg_userid)) do
+   {
+      es_set gg_popup_identifier server_var(gg_userid)
+      es foreach player gg_userid server_var(gg_popup_identifier) "es_xdoblock gungame4/addons/gg_popup_lite/send_menu_foreach"
+   }
+   else do
+   {
+      es_xformatqv gg_query "UPDATE gg_popup_players SET active_menuname = '%1' WHERE userid = %2" gg_popup_menuname gg_userid
+      es_sql query gg_popup_database server_var(gg_query)
+      if (server_var(gg_popup_menuselectkeys) != "-") do
+      {
+         es_menu server_var(gg_popup_duration) server_var(gg_userid) server_var(gg_menu_format) server_var(gg_popup_menuselectkeys)
+      }
+      else do
+      {
+         es_menu server_var(gg_popup_duration) server_var(gg_userid) server_var(gg_menu_format)
+      }
+   }
+   if (server_var(gg_popup_duration) != 0) then es_xdelayed server_var(gg_popup_duration) gg_popup timeout server_var(gg_userid)
+}
+
+block send_menu_foreach
+{
+   es_xformatqv gg_query "UPDATE gg_popup_players SET active_menuname = '%1' WHERE userid = %2" gg_popup_menuname gg_userid
+   es_sql query gg_popup_database server_var(gg_query)
+   if (server_var(gg_popup_menuselectkeys) != "-") do
+   {
+      es_menu server_var(gg_popup_duration) server_var(gg_userid) server_var(gg_menu_format) server_var(gg_popup_menuselectkeys)
+   }
+   else do
+   {
+      es_menu server_var(gg_popup_duration) server_var(gg_userid) server_var(gg_menu_format)
+   }
+}
+
+// gg_popup submenu <menu name> <1-10> <submenu name>
+block submenu
+{
+   es_xgetargc gg_popup_argc
+   if (server_var(gg_popup_argc) = 5) do
+   {
+      es_xgetargv gg_popup_menuname 2
+      es gg_popup exists server_var(gg_popup_menuname)
+      ifx true(gg_exists) do
+      {
+         es_xgetargv gg_selection 3
+         if (server_var(gg_selection) in "1234567890") do
+         {
+            es_xgetargv gg_popup_submenuname 4
+            es_xformatqv gg_query "INSERT INTO '%1' (submenu,submenu_select) VALUES('%2','%3')" gg_popup_menuname gg_popup_submenuname gg_selection
+            es_sql query gg_popup_database server_var(gg_query)
+         }
+         else do
+         {
+            es_xformatv gg_format "[GunGame Popup]: Unable to add submenu - '%1' is not a valid menu selection!" gg_selection
+            esnq es_xdbgmsg 0 server_var(gg_format)
+         }
+      }
+      else do
+      {
+         es_xformatv gg_format "[GunGame PopUp]: Unable to delete the popup '%1' - The popup does not exist!" gg_popup_menuname
+         esnq es_xdbgmsg 0 server_var(gg_format)
+      }
+   }
+   else do
+   {
+      es_xdbgmsg 0 [GunGame PopUp]: gg_popup submenu <menu name> <1-10> <submenu name>
+   }
+}
+
+// gg_popup setvalidkeys <menu name> <"1234567890">
+block setvalidkeys
+{
+   es_xgetargc gg_popup_argc
+   if (server_var(gg_popup_argc) = 4) do
+   {
+      es_xgetargv gg_popup_menuname 2
+      es gg_popup exists server_var(gg_popup_menuname)
+      ifx true(gg_exists) do
+      {
+         es_xgetargv gg_popup_menuselectkeys 3
+         es_xformatqv gg_query "UPDATE gg_created_popups SET validkeys = '%1' WHERE popups = '%2'" gg_popup_menuselectkeys gg_popup_menuname
+         es_sql query gg_popup_database server_var(gg_query)
+      }
+   }
+   else do
+   {
+      es_xdbgmsg 0 [GunGame PopUp]: gg_popup setvalidkeys <menu name> <"1234567890">
+   }
+}
+
+// gg_popup cache <menu name>
+block cache
+{
+   es_xgetargc gg_popup_argc
+   if (server_var(gg_popup_argc) = 3) do
+   {
+      es_xgetargv gg_popup_menuname 2
+      es gg_popup exists server_var(gg_popup_menuname)
+      ifx true(gg_exists) do
+      {
+         es_xset gg_exists 0
+         es_xformatqv gg_query "SELECT menuname FROM gg_popup_cache WHERE menuname='%1'" gg_popup_menuname
+         es_sql queryvalue gg_popup_database gg_exists server_var(gg_query)
+         ifx false(gg_exists) do
+         {
+            es_xformatqv gg_query "SELECT lines FROM '%1' WHERE lines<>'NULL'" gg_popup_menuname
+            es_sql query gg_popup_database gg_popup_menu server_var(gg_query)
+            es_xset gg_keycount 0
+            es_foreachkey gg_tempkey in gg_popup_menu "es_xdoblock gungame4/addons/gg_popup_lite/format_menu"
+            es_xkeygroupdelete gg_popup_menu
+            es_xformatqv gg_query "INSERT INTO gg_popup_cache (menuname,menutext) VALUES('%1','%2')" gg_popup_menuname gg_menu_format
+            es_sql query gg_popup_database server_var(gg_query)
+         }
+         else do
+         {
+            es_xformatv gg_format "[GunGame PopUp]: Unable to cache the popup '%1' - this popup has already been cached!" gg_popup_menuname
+            esnq es_xdbgmsg 0 server_var(gg_format)
+         }
+      }
+      else do
+      {
+         es_xformatv gg_format "[GunGame PopUp]: Unable to cache the popup '%1' - the popup '%1' does not exist!" gg_popup_menuname
+         esnq es_xdbgmsg 0 server_var(gg_format)
+      }
+   }
+   else do
+   {
+      es_xdbgmsg 0 [GunGame PopUp]: gg_popup cache <menu name>
+   }
+}
+
+// gg_popup uncache <menu name>
+block uncache
+{
+   es_xgetargc gg_popup_argc
+   if (server_var(gg_popup_argc) = 3) do
+   {
+      es_xgetargv gg_popup_menuname 2
+      es gg_popup exists server_var(gg_popup_menuname)
+      ifx true(gg_exists) do
+      {
+         es_xset gg_exists 0
+         es_xformatqv gg_query "SELECT menuname FROM gg_popup_cache WHERE menuname='%1'" gg_popup_menuname
+         es_sql queryvalue gg_popup_database gg_exists server_var(gg_query)
+         ifx true(gg_exists) do
+         {
+            es_xformatqv gg_query "DELETE FROM gg_popup_cache WHERE menuname='%1'" gg_popup_menuname
+            es_sql query gg_popup_database server_var(gg_query)
+         }
+         else do
+         {
+            es_xformatv gg_format "[GunGame PopUp]: Unable to uncache the popup '%1' - this popup has not been cached!" gg_popup_menuname
+            esnq es_xdbgmsg 0 server_var(gg_format)
+         }
+      }
+      else do
+      {
+         es_xformatv gg_format "[GunGame PopUp]: Unable to uncache the popup '%1' - the popup '%1' does not exist!" gg_popup_menuname
+         esnq es_xdbgmsg 0 server_var(gg_format)
+      }
+   }
+   else do
+   {
+      es_xdbgmsg 0 [GunGame PopUp]: gg_popup uncache <menu name>
+   }
+}

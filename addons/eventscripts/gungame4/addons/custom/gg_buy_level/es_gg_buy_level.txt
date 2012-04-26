@@ -1,0 +1,229 @@
+// Buy level
+//
+
+block config
+{
+	// Amount of money to reward players for getting a kill
+	es_xset buy_kill_reward 250
+	
+	// Amount of money to reward players for leveling up
+	es_xset buy_level_reward 2000
+	
+	// Cost to buy a level, maximum is 16000
+	es_xset buy_level_cost 16000
+	
+	// List of weapons that cannot be bypassed
+	// List weapons separated by commas, NO SPACES!
+	es_xset buy_no_skip "hegrenade,knife"
+	
+	// Enable announcement to players that this script is loaded
+	// 0=off, 1=on
+	es_xset buy_announce 1
+}
+
+block load
+{
+	// Init vars
+	es_xset buy_query 0
+	es_xset buy_userid 0
+	es_xset buy_money 0
+	es_xset buy_weapon 0
+	es_xset buy_flag 0
+	es_xset buy_level 0
+	es_xset buy_menu 0
+	es_xset buy_temp 0
+	
+	// Init db
+	es_xsql open buy_db ":memory:"
+	es_xsql query buy_db "DROP TABLE IF EXISTS buy_players"
+	//buy_db buy_players fields: userid, money
+	es_xsql query buy_db "CREATE TABLE IF NOT EXISTS buy_players(userid int, money int DEFAULT 0, flag int(1) DEFAULT 0)"
+	
+	// Register say command
+	es_xregsaycmd !buylevel "gungame4/addons/custom/gg_buy_level/buy_cmd" "Allows players to buy a level"
+	
+	// Load config
+	es_xdoblock gungame4/addons/custom/gg_buy_level/config
+	
+	// Load announcement
+	ifx true(buy_announce) do
+	{
+		crontab 1-59/2 * * * * "es_msg #multi #green[#lightgreenBuyLevel#green] #default is ON, type !buylevel" buylevel 1
+	}
+	
+	// Add current players
+	foreach player buy_userid #all "es_xdoblock gungame4/addons/custom/gg_buy_level/player_setup"
+}
+
+event es_map_start
+{
+	// Since we do not need to keep any info when the map changes, we delete the database each map_start
+	es_xsql query buy_db "DROP TABLE IF EXISTS buy_players"
+	es_xsql query buy_db "CREATE TABLE IF NOT EXISTS buy_players(userid int, money int DEFAULT 0, flag int(1) DEFAULT 0)"
+}
+
+event player_activate
+{
+	// Add players to the database when they join the server
+	es_set buy_userid event_var(userid)
+	es_xformatqv buy_query "INSERT INTO buy_players ('userid', 'money') VALUES ('%1', '0')" buy_userid
+	es_sql query buy_db server_var(buy_query)
+}
+
+block player_setup
+{
+	// Add players to the database that may already be connected to the server
+	es_xformatqv buy_query "INSERT INTO buy_players ('userid', 'money') VALUES ('%1', '0')" buy_userid
+	es_sql query buy_db server_var(buy_query)
+}
+
+event player_spawn
+{
+	// Make sure the player is actually in the game first
+	if (event_var(es_userteam) > 1) do
+	{
+		// Check how much money the database says they should have and set their current cash level
+		es_set buy_userid event_var(userid)
+		es_xformatqv buy_query "SELECT money FROM buy_players WHERE userid = '%1'" buy_userid
+		es_sql queryvalue buy_db buy_money server_var(buy_query)
+		es playerset cash server_var(buy_userid) server_var(buy_money)
+	}
+}
+
+event player_death
+{
+	es_set buy_userid event_var(attacker)
+	// If players do not receive a reward for killing players, stop here
+	ifx true(buy_kill_reward) do
+	{
+		// Do not reward players for kill during warmup round
+		ifx false(gg_warmup_started) do
+		{
+			// If the player died because of world or suicide, we do not need to continue further
+			if (event_var(attacker) > 0) do
+			{
+				if (event_var(attacker) != event_var(userid)) do
+				{
+					// Give reward for killing a player, and update their cash and the database
+					es_xformatqv buy_query "SELECT money FROM buy_players WHERE userid = '%1'" buy_userid
+					es_sql queryvalue buy_db buy_money server_var(buy_query)
+					es_math buy_money + server_var(buy_kill_reward)
+					if (server_var(buy_money) > 16000) then es_xset buy_money 16000
+					es_xformatqv buy_query "UPDATE buy_players SET money = '%1' WHERE userid = '%2'" buy_money buy_userid
+					es_sql query buy_db server_var(buy_query)
+				}
+			}
+		}
+	}
+	else do
+	{
+		// Even if we do not give rewards for kills, we need to remove the $300 Valve gives for kills
+		es_xformatqv buy_query "SELECT money FROM buy_players WHERE userid = '%1'" buy_userid
+		es_sql queryvalue buy_db buy_money server_var(buy_query)
+	}
+	// Set player's cash display here
+	es playerset cash server_var(buy_userid) server_var(buy_money)
+}
+
+event gg_levelup
+{
+	// If players do not receive a reward for leveling up, stop here
+	ifx true(buy_level_reward) do
+	{
+		es_set buy_userid event_var(userid)
+		// If player is leveling up because they bought a level, do not give cash for this level
+		es_xformatqv buy_query "SELECT flag FROM buy_players WHERE userid = '%1'" buy_userid
+		es_sql queryvalue buy_db buy_flag server_var(buy_query)
+		ifx false(buy_flag) do
+		{
+			// Give reward for leveling up, and update their cash and the database
+			es_xformatqv buy_query "SELECT money FROM buy_players WHERE userid = '%1'" buy_userid
+			es_sql queryvalue buy_db buy_money server_var(buy_query)
+			es_math buy_money + server_var(buy_level_reward)
+			if (server_var(buy_money) > 16000) then es_xset buy_money 16000
+			es playerset cash server_var(buy_userid) server_var(buy_money)
+			es_xformatqv buy_query "UPDATE buy_players SET money = '%1' WHERE userid = '%2'" buy_money buy_userid
+			es_sql query buy_db server_var(buy_query)
+		}
+		else do
+		{
+			es_xformatqv buy_query "UPDATE buy_players SET flag = '0' WHERE userid = '%1'" buy_userid
+			es_sql query buy_db server_var(buy_query)
+			es_tell server_var(buy_userid) #multi #green[#lightgreenBuyLevel#green] #default You have purchased level#lightgreen event_var(new_level)
+		}
+	}
+}
+
+
+block buy_cmd
+{
+	es_xgetcmduserid buy_userid
+	// Check to see if this weapon can be skipped by buying the next level
+	es gg_getweapon buy_weapon server_var(buy_userid)
+	if (server_var(buy_weapon) notin server_var(buy_no_skip)) do
+	{
+		// Check to make sure they are not on the last level
+		es gg_getlevel buy_level server_var(buy_userid)
+		gg_getmaxlevel buy_temp
+		if (server_var(buy_level) != server_var(buy_temp)) do
+		{
+			// Get their money and if they have enough, give them a level
+			es_xformatqv buy_query "SELECT money FROM buy_players WHERE userid = '%1'" buy_userid
+			es_sql queryvalue buy_db buy_money server_var(buy_query)
+			es_math buy_money - server_var(buy_level_cost)
+			if (server_var(buy_money) >= 0) do
+			{
+				// Player has enough money, level them up and update their cash and the database
+				es_xformatqv buy_query "UPDATE buy_players SET money = '%1' WHERE userid = '%2'" buy_money buy_userid
+				es_sql query buy_db server_var(buy_query)
+				// Set flag to prevent players from gaining cash from buying levels
+				es_xformatqv buy_query "UPDATE buy_players SET flag = '1' WHERE userid = '%1'" buy_userid
+				es_sql query buy_db server_var(buy_query)
+				es playerset cash server_var(buy_userid) server_var(buy_money)
+				es gg_levelup server_var(buy_userid)
+				// Check to see if turbo mode is on, and if not, give weapon now
+				es_xset gg_exists 0
+				es_xexists gg_exists script gungame4/addons/gg_turbo_mode
+				ifx false(gg_exists) do
+				{
+					es_getplayerprop gg_tmp server_var(buy_userid) "CCSPlayer.baseclass.pl.deadflag"
+					ifx false(gg_tmp) do
+					{
+						es_give server_var(buy_userid) player_weaponstrip
+						es_fire server_var(buy_userid) player_weaponstrip Strip 1
+						es_delayed 0.01 es_xgive server_var(buy_userid) item_assaultsuit
+						es_delayed 0.01 es_xgive server_var(buy_userid) weapon_knife
+						es_delayed 0.01 gg_equip server_var(buy_userid) event_var(team)
+					}
+				}
+			}
+			else do
+			{
+				// Player does not have enough money
+				es_tell server_var(buy_userid) #multi #green[#lightgreenBuyLevel#green] #default You do not have enough money.
+				es_xformatv buy_menu "BuyLevel\n----------\n \n Reward for kills: %1\n Reward for levels: %2\n \n Level cost: %3\n \n----------\n->  0. Exit" buy_kill_reward buy_level_reward buy_level_cost
+				es_menu 5 server_var(buy_userid) server_var(buy_menu)
+			}
+		}
+		else do
+		{
+			// Player is on the last level and cannot skip
+			es_tell server_var(buy_userid) #multi #green[#lightgreenBuyLevel#green] #default You cannot skip level server_var(buy_level) by buying it!
+		}
+	}
+	else do
+	{
+		// Player cannot skip this level
+		es_tell server_var(buy_userid) #multi #green[#lightgreenBuyLevel#green] #default You cannot skip server_var(buy_weapon) by buying it!
+	}
+}
+
+block unload
+{
+	// Remove the database from memory and delete the say command we created
+	es_xsql close buy_db
+	es_xunregsaycmd !buylevel
+	
+	// Remove announcement
+	crontab del buylevel
+}

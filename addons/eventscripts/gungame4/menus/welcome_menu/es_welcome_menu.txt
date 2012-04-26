@@ -1,0 +1,56 @@
+// Welcome Menu
+// (c)2007 by GunGame Coding Team (cagemonkey,XE_Manup)
+//
+
+event player_team
+{
+	// Welcome message
+	if (event_var(team) > 1) do
+	{
+		if (event_var(oldteam) < 2) do
+		{
+			// Welcome message
+			es_xformatqv gg_menuline_format "This server is running GunGame %1\n_______________\n" eventscripts_gg
+			es_xset gg_tmp_counter 0
+			es_xset gg_exists 0
+			es_xexists gg_exists script gungame4/addons/gg_knife_pro
+			ifx true(gg_exists) do
+			{
+				es_xmath gg_tmp_counter + 1
+				es_xformatv gg_menuline_format "%1->%2. Knife Pro is ENABLED!!\n" gg_menuline_format gg_tmp_counter
+			}
+			es_xset gg_exists 0
+			es_xexists gg_exists script gungame4/addons/gg_turbo_mode
+			ifx true(gg_exists) do
+			{
+				es_xmath gg_tmp_counter + 1
+				es_xformatv gg_menuline_format "%1->%2. Turbo Mode is ENABLED!!\n" gg_menuline_format gg_tmp_counter
+			}
+			es_xset gg_exists 0
+			es_xexists gg_exists script gungame4/addons/gg_knife_elite
+			ifx true(gg_exists) do
+			{
+				es_xmath gg_tmp_counter + 1
+				es_xformatv gg_menuline_format "%1->%2. Knife Elite Mode is ENABLED!!\n" gg_menuline_format gg_tmp_counter
+			}
+			ifx true(gg_multikill) do
+			{
+				es_xmath gg_tmp_counter + 1
+				es_xformatv gg_menuline_format "%1->%2. Multikill Mode is ENABLED!! %3 kills required\n" gg_menuline_format gg_tmp_counter gg_multikill
+			}
+			es_xset gg_exists 0
+			es_xexists gg_exists script gungame4/addons/gg_deathmatch
+			ifx true(gg_exists) do
+			{
+				es_xmath gg_tmp_counter + 1
+				es_xformatv gg_menuline_format "%1->%2. Deathmatch Addon is ENABLED!!\n" gg_menuline_format gg_tmp_counter
+				ifx true(gg_dm_spawn_protect) do
+				{
+					es_xformatv gg_menuline_format "%1 - Spawn protection: %2 seconds\n" gg_menuline_format gg_dm_spawn_protect
+				}
+			}
+			es_xformatv gg_menuline_format "%1---------------\nType !rules for instructions on how to play and a list of commands\nType !level to get your level info and who is leading\nType !score to get a list of player scores\nType !rank to get a list of player ranks\n \n->0. Exit" gg_menuline_format
+			es_menu 0 event_var(userid) server_var(gg_menuline_format)
+		}
+	}
+}

@@ -1,0 +1,34 @@
+// Extra Grenade Level Weapons
+// (c)2007 by GunGame Coding Team (cagemonkey,XE_Manup)
+//
+
+block load
+{
+	// Init vars
+	if ("weapon_" notin server_var(gg_nade_bonus)) do
+	{
+		es_xformatv gg_nade_bonus "weapon_%1" gg_nade_bonus
+	}
+}
+
+
+event player_spawn
+{
+	es gg_getweapon gg_user_wpn event_var(userid)
+	if (server_var(gg_user_wpn) == "hegrenade") do
+	{
+		es_delayed 0.05 es_xgive event_var(userid) server_var(gg_nade_bonus)
+		es_delayed 0.06 es_xsexec event_var(userid) use weapon_hegrenade
+	}
+}
+
+
+event gg_levelup
+{
+	es gg_getweapon gg_user_wpn event_var(userid)
+	if (server_var(gg_user_wpn) == "hegrenade") do
+	{
+		es_delayed 0.05 es_xgive event_var(userid) server_var(gg_nade_bonus)
+		es_delayed 0.06 es_xsexec event_var(userid) use weapon_hegrenade
+	}
+}

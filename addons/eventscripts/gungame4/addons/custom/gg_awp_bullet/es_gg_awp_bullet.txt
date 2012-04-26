@@ -1,0 +1,11 @@
+// Single bullet awps
+//
+
+event item_pickup
+{
+	if (event_var(item) == "awp") do
+	{
+		es playerset clip event_var(userid) weapon_awp 1
+		es playerset ammo event_var(userid) weapon_awp 0
+	}
+}

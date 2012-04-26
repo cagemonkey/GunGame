@@ -1,0 +1,91 @@
+// Triple Level Bonus Addon
+// (c)2007 by GunGame Coding Team (cagemonkey,XE_Manup)
+//
+
+block load
+{
+	es_xdoblock gungame4/addons/gg_triple_level/init
+	
+	es_xset gg_exists 0
+	es_xexists gg_exists command gg_triple_cmd
+	ifx false(gg_exists) do
+	{
+		es_xregcmd gg_triple_cmd gungame4/addons/gg_triple_level/remove_effects "Internal GunGame command"
+	}
+}
+
+block init
+{
+	es_xset gg_user_triple 0 "Player's current levelup count, Location: es_triple_level"
+}
+
+event gg_levelup
+{
+	es_set gg_userid event_var(userid)
+	es_xformatqv gg_query "SELECT levelup FROM gg_players WHERE userid = '%1'" gg_userid
+	es_sql queryvalue gg_live gg_user_triple server_var(gg_query)
+	
+	if (server_var(gg_user_triple) == 3) do
+	{
+		// Reset triple level count
+		es_xformatqv gg_query "UPDATE gg_players SET levelup = 0 WHERE userid = '%1'" gg_userid
+		es_sql query gg_live server_var(gg_query)
+	
+		es_emitsound player event_var(userid) server_var(gg_sound_triple) 1.0 1.0
+		es_msg #multi #green event_var(name)#lightgreen triple levelled!!!
+		es_centermsg event_var(name) triple levelled!!!
+				
+		// Effects
+		// Spark effect on player
+		es_give event_var(userid) env_spark
+		es_fire event_var(userid) env_spark setparent !activator
+		es_fire event_var(userid) env_spark addoutput "spawnflags 896"
+		es_fire event_var(userid) env_spark addoutput "angles -90 0 0"
+		es_fire event_var(userid) env_spark addoutput "magnitude 8"
+		es_fire event_var(userid) env_spark addoutput "traillength 3"
+		es_fire event_var(userid) env_spark startspark
+				
+		// Lighting effect on player
+		//es_give event_var(userid) point_spotlight
+		//es_fire event_var(userid) point_spotlight setparent !activator
+		//es_fire event_var(userid) point_spotlight addoutput "renderamt 255"
+		//es_fire event_var(userid) point_spotlight addoutput "spotlightlength 100"
+		//es_fire event_var(userid) point_spotlight addoutput "spotlightwidth 300"
+		//es_fire event_var(userid) point_spotlight addoutput "rendercolor 0 0 255"
+		//es_fire event_var(userid) point_spotlight addoutput "angles -90 0 0"
+		//es_fire event_var(userid) point_spotlight lighton
+				
+		// Change player speed to 1.5x normal
+		es_setplayerprop event_var(userid) CCSPlayer.baseclass.localdata.m_flLaggedMovementValue 1.5
+		
+		// Gravity 0.5x normal
+		ifx true(est_version) do
+		{
+			es est_SetGravity event_var(userid) 0.5
+		}
+				
+		// Remove triple level effects in 10 seconds
+		es_delayed 10 gg_triple_cmd event_var(userid)
+	}
+}
+
+event player_death
+{
+	es_xformatqv gg_query "UPDATE gg_players SET levelup = '0' WHERE userid = '%1'" gg_userid
+	es_sql query gg_live server_var(gg_query)
+	gg_triple_cmd event_var(userid)
+}
+
+block remove_effects
+{
+	es_xgetargv gg_userid 1
+	
+	// Reset player to defaults
+	es_fire server_var(gg_userid) env_spark stopspark
+	//es_fire server_var(gg_userid) point_spotlight kill
+	es_setplayerprop server_var(gg_userid) CCSPlayer.baseclass.localdata.m_flLaggedMovementValue 1.0
+	ifx true(est_version) do
+	{
+		es est_SetGravity server_var(gg_userid) 1.0
+	}
+}

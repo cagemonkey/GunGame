@@ -1,0 +1,1039 @@
+// vote command v0.4.8
+// Submitted by [NATO]Hunter
+//
+// vote allows you to start a user vote
+// syntax:
+// vote create <votename> <callback-blockname> [vote-callback-blockname]
+// vote delete <votename>
+// vote exists <return-var> <votename>
+// vote isrunning <return-var> <votename>
+// vote setquestion <votename> "<question>"
+// vote setanswer <votename> <#> "<answer>"
+// vote addanswer <votename> "<answer>"
+// vote remanswer <votename> <#>
+// vote start <votename> <time>
+// vote stop <votename> [cancel]
+// vote send <votename> <userid> [force]
+// vote submit <votename> <userid> <#> [force]
+// vote getvotes <return-var> <votename> [answer]
+// vote gettimeleft <return-var> <votename>
+// vote list
+//
+// Originally submitted by [NATO]Hunter
+
+block load
+{
+  es_xdoblock vote/vote_register
+}
+
+// called to register the vote command
+block vote_register
+{
+  // variables used by vote
+  es_xset _vote_cmd 0
+  es_xset _vote_name 0
+  es_xset _vote_exists 0
+  es_xset _vote_time 0
+  es_xset _vote_block 0
+  es_xset _vote_question 0
+  es_xset _vote_answer 0
+  es_xset _vote_userid 0
+  es_xset _vote_select 0
+  es_xset _vote_temp 0
+  es_xset _vote_count 0
+  es_xset _vote_text 0
+  es_xset _vote_id 0
+  es_xset _vote_votes 0
+  es_xset _vote_tmp 0
+  es_xset _vote_key 0
+  es_xset _vote_keygroup 0
+  es_xset _vote_silent 0
+  es_xset _vote_query 0
+  es_xset _vote_format 0
+
+  // vote requirements
+  es_xexists _vote_exists script popup
+  ifx false(_vote_exists) do
+  {
+    es_xload popup
+  }
+  es_xexists _vote_exists script keymenu
+  ifx false(_vote_exists) do
+  {
+    es_xload keymenu
+  }
+
+  // vote keygroup
+  es_xkeygroupcreate _vote_instance
+  es_xkeygroupcreate _vote_users
+  
+  // vote database
+  es_xsql open _vote_database ":memory:"
+  es_xformatqv _vote_query "CREATE TABLE IF NOT EXISTS _vote_list (vote varchar(100), id integer, display varchar(100), submits integer default 0,PRIMARY KEY(vote, id));"
+  es_sql query _vote_database server_var(_vote_query)
+
+  // check to see if vote exists
+  es_xexists _vote_exists command vote
+  ifx false(_vote_exists) do
+  {
+    es_xregcmd vote vote/vote "Allows you to create a user vote."
+  }
+  
+  testcase qcreate corelib votetest "Tests vote"
+  testcase addtest votetest votetest1 vote/vote_test "Tests vote"
+}
+
+block unload
+{
+  // vote database
+  es_xsql query _vote_database "DROP TABLE IF EXISTS _vote_list"
+  es_xsql close _vote_database
+
+  // vote keygroup
+  es_xforeachkey _vote_name in _vote_instance "es_xdoblock vote/deletevotes"
+  es_xkeygroupdelete _vote_instance
+  es_xkeygroupdelete _vote_users
+}
+
+block vote
+{
+  // get the operation they want to do
+  es_xexists _vote_temp script keymenu
+  ifx true(_vote_temp) do
+  {
+    es_xgetargv _vote_cmd 1
+    es_format _vote_cmd "vote/vote_cmd_%1" server_var(_vote_cmd)
+    es_exists _vote_exists block server_var(_vote_cmd)
+    ifx true(_vote_exists) do
+    {
+      es_doblock server_var(_vote_cmd)
+    }
+    else do
+    {
+      es_xdbgmsg 0 vote: Invalid subcommand for vote.
+    }
+  }
+  else do
+  {
+    es_xdbgmsg 0 vote: keymenu lib has to be loaded!
+  }
+}
+
+block vote_cmd_create
+{
+  es_xgetargv _vote_name 2
+  ifx true(_vote_name) do
+  {
+    es_xgetargv _vote_block 3
+    ifx true(_vote_block) do
+    {
+      es_exists _vote_exists key _vote_instance server_var(_vote_name)
+      ifx false(_vote_exists) do
+      {
+        es_keycreate _vote_users server_var(_vote_name)
+        es_keycreate _vote_instance server_var(_vote_name)
+        
+        es_keysetvalue _vote_instance server_var(_vote_name) running 0
+        es_keysetvalue _vote_instance server_var(_vote_name) votes 0
+        es_keysetvalue _vote_instance server_var(_vote_name) time 0
+        es_keysetvalue _vote_instance server_var(_vote_name) block server_var(_vote_block)
+        es_xgetargv _vote_block 4
+        ifx true(_vote_block) do
+        {
+          es_keysetvalue _vote_instance server_var(_vote_name) voteblock server_var(_vote_block)
+        }
+      }
+      else do
+      {
+        es_xformatv _vote_format "vote: The vote '%1' does already exists." _vote_name
+        es_xdbgmsgv 0 _vote_format
+      }
+    }
+    else do
+    {
+      es_xdbgmsg 0 vote: Invalid arguments for vote create. Syntax: vote create <votename> <callback-blockname> [vote-callback-blockname]
+    }
+  }
+  else do
+  {
+    es_xdbgmsg 0 vote: Invalid arguments for vote create. Syntax: vote create <votename> <callback-blockname> [vote-callback-blockname]
+  }
+}
+
+block vote_cmd_delete
+{
+  es_xgetargv _vote_name 2
+  ifx true(_vote_name) do
+  {
+    es_exists _vote_exists key _vote_instance server_var(_vote_name)
+    ifx true(_vote_exists) do
+    {
+      es_keygetvalue _vote_exists _vote_instance server_var(_vote_name) running
+      ifx false(_vote_exists) do
+      {
+        es_keydelete _vote_instance server_var(_vote_name)
+        es_keydelete _vote_users server_var(_vote_name)
+        es_xformatv _vote_query "DELETE FROM _vote_list WHERE vote='%1'" _vote_name
+        es_sql query _vote_database server_var(_vote_query)
+      }
+      else do
+      {
+        es_xformatv _vote_format "vote: The vote '%1' is still running. Use vote stop to cancel/end the vote!" _vote_name
+        es_xdbgmsgv 0 _vote_format
+      }
+    }
+    else do
+    {
+      es_xdbgmsg 0 vote: This vote does not exists.
+    }
+  }
+  else do
+  {
+    es_xdbgmsg 0 vote: Invalid arguments for vote delete. Syntax: vote delete <votename>
+  }
+}
+
+block vote_cmd_exists
+{
+  es_xgetargv _vote_temp 2
+  ifx true(_vote_temp) do
+  {
+    es_xgetargv _vote_name 3
+    ifx true(_vote_name) do
+    {
+      es_exists server_var(_vote_temp) key _vote_instance server_var(_vote_name)
+    }
+    else do
+    {
+      es_xdbgmsg 0 vote: Invalid arguments for vote exists. Syntax: vote exists <return-var> <votename>
+    }
+  }
+  else do
+  {
+    es_xdbgmsg 0 vote: Invalid arguments for vote exists. Syntax: vote exists <return-var> <votename>
+  }
+}
+
+block vote_cmd_isrunning
+{
+  es_xgetargv _vote_temp 2
+  ifx true(_vote_temp) do
+  {
+    es_xgetargv _vote_name 3
+    ifx true(_vote_name) do
+    {
+      es_exists _vote_exists key _vote_instance server_var(_vote_name)
+      ifx true(_vote_exists) do
+      {
+        es_keygetvalue server_var(_vote_temp) _vote_instance server_var(_vote_name) running
+      }
+      else do
+      {
+        es_xformatv _vote_format "vote: The vote '%1' does not exists." _vote_name
+        es_xdbgmsgv 0 _vote_format
+      }
+    }
+    else do
+    {
+      es_xdbgmsg 0 vote: Invalid arguments for vote isrunning. Syntax: vote isrunning <return-var> <votename>
+    }
+  }
+  else do
+  {
+    es_xdbgmsg 0 vote: Invalid arguments for vote isrunning. Syntax: vote isrunning <return-var> <votename>
+  }
+}
+
+block vote_cmd_setquestion
+{
+  es_xgetargv _vote_name 2
+  ifx true(_vote_name) do
+  {
+    es_xgetargv _vote_question 3
+    ifx true(_vote_question) do
+    {
+      es_exists _vote_exists key _vote_instance server_var(_vote_name)
+      ifx true(_vote_exists) do
+      {
+        es_keygetvalue _vote_exists _vote_instance server_var(_vote_name) running
+        ifx false(_vote_exists) do
+        {
+          es_keysetvalue _vote_instance server_var(_vote_name) question server_var(_vote_question)
+        }
+        else do
+        {
+          es_xformatv _vote_format "vote: The vote '%1' is already running." _vote_name
+          es_xdbgmsgv 0 _vote_format
+        }
+      }
+      else do
+      {
+        es_xformatv _vote_format "vote: The vote '%1' does not exists." _vote_name
+        es_xdbgmsgv 0 _vote_format
+      }
+    }
+    else do
+    {
+      es_xdbgmsg 0 vote: Invalid arguments for vote setquestion. Syntax: vote setquestion <votename> "<question>"
+    }
+  }
+  else do
+  {
+    es_xdbgmsg 0 vote: Invalid arguments for vote setquestion. Syntax: vote setquestion <votename> "<question>"
+  }
+}
+
+block vote_cmd_setanswer
+{
+  es_xgetargv _vote_name 2
+  ifx true(_vote_name) do
+  {
+    es_xgetargv _vote_temp 3
+    ifx true(_vote_temp) do
+    {
+      es_xgetargv _vote_answer 4
+      ifx true(_vote_answer) do
+      {
+        es_exists _vote_exists key _vote_instance server_var(_vote_name)
+        ifx true(_vote_exists) do
+        {
+          es_keygetvalue _vote_exists _vote_instance server_var(_vote_name) running
+          ifx false(_vote_exists) do
+          {
+            es_xformatqv _vote_query "UPDATE _vote_list SET display='%1' WHERE vote='%2' AND id='%3'" _vote_answer _vote_name _vote_temp
+            es_sql query _vote_database server_var(_vote_query)
+          }
+          else do
+          {
+            es_xformatv _vote_format "vote: The vote '%1' is already running." _vote_name
+            es_xdbgmsgv 0 _vote_format
+          }
+        }
+        else do
+        {
+          es_xformatv _vote_format "vote: The vote '%1' does not exists." _vote_name
+          es_xdbgmsgv 0 _vote_format
+        }
+      }
+      else do
+      {
+        es_xdbgmsg 0 vote: Invalid arguments for vote setanswer. Syntax: vote setanswer <votename> <#> "<answer>"
+      }
+    }
+    else do
+    {
+      es_xdbgmsg 0 vote: Invalid arguments for vote setanswer. Syntax: vote setanswer <votename> <#> "<answer>"
+    }
+  }
+  else do
+  {
+    es_xdbgmsg 0 vote: Invalid arguments for vote setanswer. Syntax: vote setanswer <votename> <#> "<answer>"
+  }
+}
+
+block vote_cmd_addanswer
+{
+  es_xgetargv _vote_name 2
+  ifx true(_vote_name) do
+  {
+    es_xgetargv _vote_answer 3
+    ifx true(_vote_answer) do
+    {
+      es_exists _vote_exists key _vote_instance server_var(_vote_name)
+      ifx true(_vote_exists) do
+      {
+        es_keygetvalue _vote_exists _vote_instance server_var(_vote_name) running
+        ifx false(_vote_exists) do
+        {
+          es_xformatqv _vote_query "SELECT COUNT(display) FROM _vote_list WHERE vote='%1'" _vote_name
+          es_sql queryvalue _vote_database _vote_count server_var(_vote_query)
+          es_xmath _vote_count + 1
+          es_xformatqv _vote_query "REPLACE INTO _vote_list (vote,id,display,submits) VALUES('%1','%2','%3','0')" _vote_name _vote_count _vote_answer
+          es_sql query _vote_database server_var(_vote_query)
+        }
+        else do
+        {
+          es_xformatv _vote_format "vote: The vote '%1' is already running." _vote_name
+          es_xdbgmsgv 0 _vote_format
+        }
+      }
+      else do
+      {
+        es_xformatv _vote_format "vote: The vote '%1' does not exists." _vote_name
+        es_xdbgmsgv 0 _vote_format
+      }
+    }
+    else do
+    {
+      es_xdbgmsg 0 vote: Invalid arguments for vote addanswer. Syntax: vote addanswer <votename> "<answer>"
+    }
+  }
+  else do
+  {
+    es_xdbgmsg 0 vote: Invalid arguments for vote addanswer. Syntax: vote addanswer <votename> "<answer>"
+  }
+}
+
+block vote_cmd_remanswer
+{
+  es_xgetargv _vote_name 2
+  ifx true(_vote_name) do
+  {
+    es_xgetargv _vote_temp 3
+    ifx true(_vote_temp) do
+    {
+      es_exists _vote_exists key _vote_instance server_var(_vote_name)
+      ifx true(_vote_exists) do
+      {
+        es_keygetvalue _vote_exists _vote_instance server_var(_vote_name) running
+        ifx false(_vote_exists) do
+        {
+          es_xformatqv _vote_query "SELECT COUNT(display) FROM _vote_list WHERE vote='%1' AND id='%2'" _vote_name _vote_temp
+          es_sql queryvalue _vote_database _vote_count server_var(_vote_query)
+          ifx true(_vote_count) do
+          {
+            es_xformatqv _vote_query "DELETE FROM _vote_list WHERE vote='%1' AND id='%2'" _vote_name _vote_temp
+            es_sql query _vote_database server_var(_vote_query)
+          }
+          else do
+          {
+            es_xformatv _vote_format "vote: The answer '%1' does not exists in vote '%2'." _vote_temp _vote_name
+            es_xdbgmsgv 0 _vote_format
+          }
+        }
+        else do
+        {
+          es_xformatv _vote_format "vote: The vote '%1' is already running." _vote_name
+          es_xdbgmsgv 0 _vote_format
+        }
+      }
+      else do
+      {
+        es_xformatv _vote_format "vote: The vote '%1' does not exists." _vote_name
+        es_xdbgmsgv 0 _vote_format
+      }
+    }
+    else do
+    {
+      es_xdbgmsg 0 vote: Invalid arguments for vote remanswer. Syntax: vote remanswer <votename> <#>
+    }
+  }
+  else do
+  {
+    es_xdbgmsg 0 vote: Invalid arguments for vote remanswer. Syntax: vote remanswer <votename> <#>
+  }
+}
+
+block vote_cmd_start
+{
+  es_xgetargv _vote_name 2
+  ifx true(_vote_name) do
+  {
+    es_xgetargv _vote_time 3
+    ifx true(_vote_time) do
+    {
+      es_exists _vote_exists key _vote_instance server_var(_vote_name)
+      ifx true(_vote_exists) do
+      {
+        es_keygetvalue _vote_exists _vote_instance server_var(_vote_name) running
+        ifx false(_vote_exists) do
+        {
+          es_xformatqv _vote_query "SELECT COUNT(display) FROM _vote_list WHERE vote='%1'" _vote_name
+          es_sql queryvalue _vote_database _vote_count server_var(_vote_query)
+          ifx true(_vote_count) do
+          {
+            es_keysetvalue _vote_instance server_var(_vote_name) running 1
+            es_keysetvalue _vote_instance server_var(_vote_name) votes 0
+            es_keysetvalue _vote_instance server_var(_vote_name) time server_var(_vote_time)
+            es_keygetvalue _vote_question _vote_instance server_var(_vote_name) question
+            ifx true(_vote_question) do
+            {
+              es_xformatv _vote_keygroup "_voteresult_%1" _vote_name
+              es keygroupremove server_var(_vote_keygroup)
+              es_xformatqv _vote_query "SELECT display,id FROM _vote_list WHERE vote='%1'" _vote_name
+              es_sql query _vote_database server_var(_vote_keygroup) server_var(_vote_query)
+              esnq keymenu create server_var(_vote_name) _vote_select vote/vote_submit server_var(_vote_keygroup) #keyvalue display #key server_var(_vote_question)
+              es_delayed 1 vote __wait server_var(_vote_name)
+              foreach player _vote_userid #human "es vote send server_var(_vote_name) server_var(_vote_userid) force"
+            }
+            else do
+            {
+              es_xformatv _vote_format "vote: The vote '%1' does not has a question. Use vote setquestion to set a question!" _vote_name
+              es_xdbgmsgv 0 _vote_format
+            }
+          }
+          else do
+          {
+            es_xformatv _vote_format "vote: The vote '%1' does not has any answer. Use vote addanswer to add some answers!" _vote_name
+            es_xdbgmsgv 0 _vote_format
+          }
+        }
+        else do
+        {
+        es_xformatv _vote_format "vote: The vote '%1' is already running." _vote_name
+        es_xdbgmsgv 0 _vote_format
+        }
+      }
+      else do
+      {
+        es_xformatv _vote_format "vote: The vote '%1' does not exists." _vote_name
+        es_xdbgmsgv 0 _vote_format
+      }
+    }
+    else do
+    {
+      es_xdbgmsg 0 vote: Invalid arguments for vote start. Syntax: vote start <votename> <time>
+    }
+  }
+  else do
+  {
+    es_xdbgmsg 0 vote: Invalid arguments for vote start. Syntax: vote start <votename> <time>
+  }
+}
+block vote_cmd___wait
+{
+  es_xgetargv _vote_name 2
+  ifx true(_vote_name) do
+  {
+    es_exists _vote_exists key _vote_instance server_var(_vote_name)
+    ifx true(_vote_exists) do
+    {
+      es_keygetvalue _vote_exists _vote_instance server_var(_vote_name) running
+      ifx true(_vote_exists) do
+      {
+        es_keygetvalue _vote_time _vote_instance server_var(_vote_name) time
+        ifx true(_vote_time) do
+        {
+          es_xmath _vote_time - 1
+          es_keysetvalue _vote_instance server_var(_vote_name) time server_var(_vote_time)
+          es_delayed 1 vote __wait server_var(_vote_name)
+        }
+        else do
+        {
+          es vote stop server_var(_vote_name) 0 1
+        }
+      }
+    }
+  }
+}
+
+block vote_cmd_stop
+{
+  es_xgetargv _vote_name 2
+  ifx true(_vote_name) do
+  {
+    es_xgetargv _vote_silent 4
+    es_exists _vote_exists key _vote_instance server_var(_vote_name)
+    ifx true(_vote_exists) do
+    {
+      es_keygetvalue _vote_exists _vote_instance server_var(_vote_name) running
+      ifx true(_vote_exists) do
+      {
+        es_xset _vote_id 0
+        es_xset _vote_text 0
+        es_xset _vote_count 0
+        es_xset _vote_votes 0
+        es_xset _vote_percent 0
+        es_xset _vote_tie 0
+        es_xset _vote_canceled 0
+        es_xset _vote_userid 0
+        es_xgetargv _vote_temp 3
+        ifx false(_vote_temp) do
+        {
+          keygroupremove _vote_result
+          es_xformatqv _vote_query "SELECT display,id,submits FROM _vote_list WHERE vote='%1' ORDER BY submits DESC" _vote_name
+          es_sql query _vote_database _vote_result server_var(_vote_query)
+          es_keygetvalue _vote_id _vote_result 1 id
+          es_keygetvalue _vote_text _vote_result 1 display
+          es_keygetvalue _vote_count _vote_result 1 submits
+          es_keygetvalue _vote_votes _vote_instance server_var(_vote_name) votes
+          es_keygetvalue _vote_block _vote_instance server_var(_vote_name) block
+          es_xmathparse _vote_percent "(_vote_count / _vote_votes)*100"
+          es_xformatqv _vote_query "SELECT COUNT(display) FROM _vote_list WHERE vote='%1' AND submits='%2'" _vote_name _vote_count
+          es_sql queryvalue _vote_database _vote_tie server_var(_vote_query)
+          ifx true(_vote_tie) do
+          {
+            es_xset _vote_tie 1
+          }
+          es_doblock server_var(_vote_block)
+        }
+        else do
+        {
+          es_xset _vote_id 0
+          es_xset _vote_text 0
+          es_xset _vote_count 0
+          es_xset _vote_votes 0
+          es_xset _vote_percent 0
+          es_xset _vote_tie 0
+          es_xset _vote_canceled 1
+          es_keygetvalue _vote_block _vote_instance server_var(_vote_name) block
+          es_doblock server_var(_vote_block)
+        }
+        es_xformatqv _vote_query "UPDATE _vote_list SET submits='0' WHERE vote='%1'" _vote_name
+        es_sql query _vote_database server_var(_vote_query)
+        es_xformatv _vote_keygroup "_voteresult_%1" _vote_name
+        es keygroupremove server_var(_vote_keygroup)
+        es keymenu exists _vote_exists server_var(_vote_name)
+        ifx true(_vote_exists) do
+        {
+          es keymenu delete server_var(_vote_name)
+        }
+        es_keysetvalue _vote_instance server_var(_vote_name) running 0
+        es_keysetvalue _vote_instance server_var(_vote_name) votes 0
+        es_keydelete _vote_users server_var(_vote_name)
+        es_keycreate _vote_users server_var(_vote_name)
+      }
+      else do
+      {
+        ifx false(_vote_silent) do
+        {
+          es_xformatv _vote_format "vote: The vote '%1' is not running." _vote_name
+          es_xdbgmsgv 0 _vote_format
+        }
+      }
+    }
+    else do
+    {
+      ifx false(_vote_silent) do
+      {
+        es_xformatv _vote_format "vote: The vote '%1' does not exists." _vote_name
+        es_xdbgmsgv 0 _vote_format
+      }
+    }
+  }
+  else do
+  {
+    es_xdbgmsg 0 vote: Invalid arguments for vote stop. Syntax: vote stop <votename> [cancel]
+  }
+}
+
+block vote_cmd_send
+{
+  es_xgetargv _vote_name 2
+  ifx true(_vote_name) do
+  {
+    es_xgetargv _vote_userid 3
+    ifx true(_vote_userid) do
+    {
+      es_exists _vote_exists key _vote_instance server_var(_vote_name)
+      ifx true(_vote_exists) do
+      {
+        es_keygetvalue _vote_exists _vote_instance server_var(_vote_name) running
+        ifx true(_vote_exists) do
+        {
+          es_xgetargv _vote_temp 4
+          ifx false(_vote_temp) do
+          {
+            es_keygetvalue _vote_exists _vote_users server_var(_vote_name) server_var(_vote_userid)
+          }
+          else do
+          {
+            es_xset _vote_exists 0
+          }
+          ifx false(_vote_exists) do
+          {
+            es keymenu exists _vote_exists server_var(_vote_name)
+            ifx true(_vote_exists) do
+            {
+              es keymenu send server_var(_vote_name) server_var(_vote_userid)
+            }
+            else do
+            {
+              es_xformatv _vote_format "vote: The keymenu '%1' does not exists." _vote_name
+              es_xdbgmsgv 0 _vote_format
+            }
+          }
+          else do
+          {
+            es_xformatv _vote_format "vote: The user '%1' has already voted in vote '%2'." _vote_userid _vote_name
+            es_xdbgmsgv 0 _vote_format
+          }
+        }
+        else do
+        {
+          es_xformatv _vote_format "vote: The vote '%1' is not running." _vote_name
+          es_xdbgmsgv 0 _vote_format
+        }
+      }
+      else do
+      {
+        es_xformatv _vote_format "vote: The vote '%1' does not exists." _vote_name
+        es_xdbgmsgv 0 _vote_format
+      }
+    }
+    else do
+    {
+      es_xdbgmsg 0 vote: Invalid arguments for vote send. Syntax: vote send <votename> <userid> [force]
+    }
+  }
+  else do
+  {
+    es_xdbgmsg 0 vote: Invalid arguments for vote send. Syntax: vote send <votename> <userid> [force]
+  }
+}
+
+block vote_submit
+{
+  es keymenu getmenuname _vote_name server_var(_popup_name)
+  es_xformatv _vote_keygroup "_voteresult_%1" _vote_name
+  es_keygetvalue _vote_select server_var(_vote_keygroup) server_var(_vote_select) id
+  es_keysetvalue _vote_users server_var(_vote_name) server_var(_popup_userid) server_var(_vote_select)
+  es_xformatqv _vote_query "UPDATE _vote_list SET submits=submits+1 WHERE vote='%1' AND id='%2'" _vote_name _vote_select
+  es_sql query _vote_database server_var(_vote_query)
+  es_keygetvalue _vote_count _vote_instance server_var(_vote_name) votes
+  es_xmath _vote_count + 1
+  es_keysetvalue _vote_instance server_var(_vote_name) votes server_var(_vote_count)
+  es_keygetvalue _vote_block _vote_instance server_var(_vote_name) voteblock
+  ifx true(_vote_block) do
+  {
+    es_xcopy _vote_userid _popup_userid
+    es_xcopy _vote_id _vote_select
+    es_xformatqv _vote_query "SELECT display FROM _vote_list WHERE vote='%1' AND id='%2'" _vote_name _vote_select
+    es_sql queryvalue _vote_database _vote_text server_var(_vote_query)
+    es_doblock server_var(_vote_block)
+  }
+  getplayercount _vote_exists #human
+  if (server_var(_vote_count) >= server_var(_vote_exists)) do
+  {
+    es_soon vote stop server_var(_vote_name) 0 1
+  }
+}
+
+block vote_cmd_submit
+{
+  es_xgetargv _vote_name 2
+  ifx true(_vote_name) do
+  {
+    es_xgetargv _vote_userid 3
+    ifx true(_vote_userid) do
+    {
+      es_exists _vote_exists key _vote_instance server_var(_vote_name)
+      ifx true(_vote_exists) do
+      {
+        es_keygetvalue _vote_exists _vote_instance server_var(_vote_name) running
+        ifx true(_vote_exists) do
+        {
+          es_xgetargv _vote_temp 5
+          ifx false(_vote_temp) do
+          {
+            es_keygetvalue _vote_exists _vote_users server_var(_vote_name) server_var(_vote_userid)
+          }
+          else do
+          {
+            es_xset _vote_exists 0
+          }
+          ifx false(_vote_exists) do
+          {
+            es_xgetargv _vote_select 4
+            es_xformatv _vote_keygroup "_voteresult_%1" _vote_name
+            es_keygetvalue _vote_select server_var(_vote_keygroup) server_var(_vote_select) id
+            es_xformatqv _vote_query "SELECT COUNT(display) FROM _vote_list WHERE vote='%1' AND id='%2'" _vote_name _vote_select
+            es_sql queryvalue _vote_database _vote_exists server_var(_vote_query)
+            ifx true(_vote_exists) do
+            {
+              es_keysetvalue _vote_users server_var(_vote_name) server_var(_vote_userid) server_var(_vote_select)
+              es_xformatqv _vote_query "UPDATE _vote_list SET submits=submits+1 WHERE vote='%1' AND id='%2'" _vote_name _vote_select
+              es_sql query _vote_database server_var(_vote_query)
+              es_keygetvalue _vote_count _vote_instance server_var(_vote_name) votes
+              es_xmath _vote_count + 1
+              es_keysetvalue _vote_instance server_var(_vote_name) votes server_var(_vote_count)
+              es_keygetvalue _vote_block _vote_instance server_var(_vote_name) voteblock
+              ifx true(_vote_block) do
+              {
+                es_xcopy _vote_id _vote_select
+                es_xformatqv _vote_query "SELECT display FROM _vote_list WHERE vote='%1' AND id='%2'" _vote_name _vote_select
+                es_sql queryvalue _vote_database _vote_text server_var(_vote_query)
+                es_doblock server_var(_vote_block)
+              }
+              getplayercount _vote_exists #human
+              if (server_var(_vote_count) >= server_var(_vote_exists)) do
+              {
+                es_soon vote stop server_var(_vote_name) 0 1
+              }
+            }
+            else do
+            {
+              es_xformatv _vote_format "vote: The answer '%1' does not exists in vote '%2'." _vote_temp _vote_name
+              es_xdbgmsgv 0 _vote_format
+            }
+          }
+          else do
+          {
+            es_xformatv _vote_format "vote: The user '%1' voted already in vote '%2'." _vote_userid _vote_name
+            es_xdbgmsgv 0 _vote_format
+          }
+        }
+        else do
+        {
+          es_xformatv _vote_format "vote: The vote '%1' is not running." _vote_name
+          es_xdbgmsgv 0 _vote_format
+        }
+      }
+      else do
+      {
+        es_xformatv _vote_format "vote: The vote '%1' does not exists." _vote_name
+        es_xdbgmsgv 0 _vote_format
+      }
+    }
+    else do
+    {
+      es_xdbgmsg 0 vote: Invalid arguments for vote submit. Syntax: vote submit <votename> <userid> <#> [force]
+    }
+  }
+  else do
+  {
+    es_xdbgmsg 0 vote: Invalid arguments for vote submit. Syntax: vote submit <votename> <userid> <#> [force]
+  }
+}
+
+block vote_cmd_getvotes
+{
+  es_xgetargv _vote_temp 2
+  ifx true(_vote_temp) do
+  {
+    es_set server_var(_vote_temp) 0
+    es_xgetargv _vote_name 3
+    ifx true(_vote_name) do
+    {
+      es_exists _vote_exists key _vote_instance server_var(_vote_name)
+      ifx true(_vote_exists) do
+      {
+        es_xgetargv _vote_select 4
+        ifx true(_vote_select) do
+        {
+          es_xformatqv _vote_query "SELECT COUNT(display) FROM _vote_list WHERE vote='%1' AND id='%2'" _vote_name _vote_select
+          es_sql queryvalue _vote_database _vote_exists server_var(_vote_query)
+          ifx true(_vote_exists) do
+          {
+            es_xformatqv _vote_query "SELECT submits FROM _vote_list WHERE vote='%1' AND id='%2'" _vote_name _vote_select
+            es_sql queryvalue _vote_database server_var(_vote_temp) server_var(_vote_query)
+          }
+          else do
+          {
+            es_xformatv _vote_format "vote: The answer '%1' does not exists in vote '%2'." _vote_temp _vote_name
+            es_xdbgmsgv 0 _vote_format
+          }
+        }
+        else do
+        {
+          es_keygetvalue server_var(_vote_temp) _vote_instance server_var(_vote_name) votes
+        }
+      }
+      else do
+      {
+        es_xformatv _vote_format "vote: The vote '%1' does not exists." _vote_name
+        es_xdbgmsgv 0 _vote_format
+      }
+    }
+    else do
+    {
+      es_xdbgmsg 0 vote: Invalid arguments for vote getvotes. Syntax: vote getvotes <return-var> <votename> [answer]
+    }
+  }
+  else do
+  {
+    es_xdbgmsg 0 vote: Invalid arguments for vote getvotes. Syntax: vote getvotes <return-var> <votename> [answer]
+  }
+}
+
+block vote_cmd_gettimeleft
+{
+  es_xgetargv _vote_temp 2
+  ifx true(_vote_temp) do
+  {
+    es_set server_var(_vote_temp) 0
+    es_xgetargv _vote_name 3
+    ifx true(_vote_name) do
+    {
+      es_exists _vote_exists key _vote_instance server_var(_vote_name)
+      ifx true(_vote_exists) do
+      {
+        es_keygetvalue server_var(_vote_temp) _vote_instance server_var(_vote_name) time
+      }
+      else do
+      {
+        es_xformatv _vote_format "vote: The vote '%1' does not exists." _vote_name
+        es_xdbgmsgv 0 _vote_format
+      }
+    }
+    else do
+    {
+      es_xdbgmsg 0 vote: Invalid arguments for vote gettimeleft. Syntax: vote gettimeleft <return-var> <votename>
+    }
+  }
+  else do
+  {
+    es_xdbgmsg 0 vote: Invalid arguments for vote gettimeleft. Syntax: vote gettimeleft <return-var> <votename>
+  }
+}
+
+block vote_cmd_list
+{
+  es_xdbgmsg 0 Registered vote names:
+  es_xdbgmsg 0 -------------------------
+  es_xset _vote_temp 0
+  es_xforeachkey _vote_name in _vote_instance "es_xdoblock vote/vote_listloop"
+  es_xdbgmsg 0 -------------------------
+}
+
+block vote_listloop
+{
+  es_xmath _vote_temp + 1
+  es_xformatv _vote_string "%1: %2" _vote_temp _vote_name
+  es_xdbgmsgv 0 _vote_string
+}
+
+event player_activate
+{
+  es_xforeachkey _vote_name in _vote_instance "es_xdoblock vote/sendplayer"
+}
+
+block sendplayer
+{
+  es_keygetvalue _vote_exists _vote_instance server_var(_vote_name) running
+  ifx true(_vote_exists) do
+  {
+    es keymenu exists _vote_exists server_var(_vote_name)
+    ifx true(_vote_exists) do
+    {
+      es_delayed 5 keymenu send server_var(_vote_name) event_var(userid)
+    }
+  }
+}
+
+event player_disconnect
+{
+  es_xforeachkey _vote_name in _vote_instance "es_xdoblock vote/clearplayer"
+}
+
+block clearplayer
+{
+  es_exists _vote_exists key _vote_users server_var(_vote_name)
+  ifx true(_vote_exists) do
+  {
+    es_keygetvalue _vote_select _vote_users server_var(_vote_name) event_var(userid)
+    ifx true(_vote_select) do
+    {
+      es_xformatqv _vote_query "SELECT COUNT(display) FROM _vote_list WHERE vote='%1' AND id='%2'" _vote_name _vote_select
+      es_sql queryvalue _vote_database _vote_exists server_var(_vote_query)
+      ifx true(_vote_exists) do
+      {
+        es_xformatqv _vote_query "UPDATE _vote_list SET submits=submits-1 WHERE vote='%1' AND id='%2'" _vote_name _vote_select
+        es_sql query _vote_database server_var(_vote_query)
+        es_keygetvalue _vote_count _vote_instance server_var(_vote_name) votes
+        es_xmath _vote_count - 1
+        es_keysetvalue _vote_instance server_var(_vote_name) votes server_var(_vote_count)
+        getplayercount _vote_exists #human
+        if (server_var(_vote_count) >= server_var(_vote_exists)) do
+        {
+          es_soon vote stop server_var(_vote_name) 0 1
+        }
+      }
+    }
+  }
+}
+
+event es_map_start
+{
+  es_xforeachkey _vote_name in _vote_instance "es_xdoblock vote/clearvotes"
+}
+
+block clearvotes
+{
+  es_keysetvalue _vote_instance server_var(_vote_name) running 0
+  es_keysetvalue _vote_instance server_var(_vote_name) votes 0
+  es_keysetvalue _vote_instance server_var(_vote_name) time 0
+  es_xformatqv _vote_query "UPDATE _vote_list SET submits='0' WHERE vote='%1'" _vote_name
+  es_sql query _vote_database server_var(_vote_query)
+  es_xformatv _vote_keygroup "_voteresult_%1" _vote_name
+  es keygroupremove server_var(_vote_keygroup)
+  es_exists _vote_exists key _vote_users server_var(_vote_name)
+  ifx true(_vote_exists) do
+  {
+    es_keydelete _vote_users server_var(_vote_name)
+  }
+  es keymenu exists _vote_exists server_var(_vote_name)
+  ifx true(_vote_exists) do
+  {
+    es keymenu delete server_var(_vote_name)
+  }
+}
+
+block deletevotes
+{
+  es_xformatv _vote_keygroup "_voteresult_%1" _vote_name
+  es keygroupremove server_var(_vote_keygroup)
+  es keymenu exists _vote_exists server_var(_vote_name)
+  ifx true(_vote_exists) do
+  {
+    es keymenu delete server_var(_vote_name)
+  }
+}
+
+block vote_test
+{
+  es_xset myvar 0
+  
+  testlib begin create1 "Testing whether or not create/exists works 1"
+  es_xset myvar 0
+  vote create testvote "vote/vote_test2"
+  vote exists myvar testvote
+  testlib fail_unless myvar equalto 1
+  testlib end
+
+  testlib begin delete1 "Testing whether or not delete/exists works 1"
+  es_xset myvar 0
+  vote delete testvote
+  vote exists myvar testvote
+  testlib fail_unless myvar equalto 0
+  testlib end
+
+  testlib begin create2 "Testing whether or not create/exists works 2"
+  es_xset myvar 0
+  vote create testvote "vote/vote_test2"
+  vote setquestion testvote "Does vote work?"
+  vote addanswer testvote "Yes"
+  vote addanswer testvote "Seems so"
+  vote addanswer testvote "No"
+  vote exists myvar testvote
+  testlib fail_unless myvar equalto 1
+  testlib end
+  
+  testlib begin running1 "Testing whether or not isrunning works 1"
+  es_xset myvar 0
+  vote isrunning myvar testvote
+  testlib fail_unless myvar equalto 0
+  testlib end
+
+  testlib begin running2 "Testing whether or not start/isrunning works 2"
+  es_xset myvar 0
+  vote start testvote 10
+  vote isrunning myvar testvote
+  testlib fail_unless myvar equalto 1
+  testlib end
+  
+  testlib begin running3 "Testing whether or not stop/isrunning works 3"
+  es_xset myvar 0
+  vote stop testvote cancel
+  vote isrunning myvar testvote
+  testlib fail_unless myvar equalto 0
+  testlib end
+
+  testlib begin exists1 "Testing whether or not exists works 1"
+  es_xset myvar 0
+  vote exists myvar testvote
+  testlib fail_unless myvar equalto 1
+  testlib end
+
+  testlib begin delete2 "Testing whether or not delete/exists works 2"
+  es_xset myvar 0
+  vote delete testvote
+  vote exists myvar testvote
+  testlib fail_unless myvar equalto 0
+  testlib end
+}
+
+block vote_test2
+{
+  // empty block
+}

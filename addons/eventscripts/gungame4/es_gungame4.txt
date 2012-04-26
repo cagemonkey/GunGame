@@ -1,0 +1,2525 @@
+// GunGame v4.0.96 RC1
+// (c)2007 by GunGame Coding Team (cagemonkey,XE_Manup)
+//
+// We would like to thank the following individuals in no particular order:
+// Mattie, Don, Awuh0, tnbporsche911, Lost
+// 
+// Cagemonkey's website:
+// http://www.cagemonkey.org
+// 
+// Mattie's Eventscripts
+// http://mattie.info/cs
+//
+// Counter-Strike.com GameServers
+// http://www.counter-strike.com
+// 
+// We would also like to extend our thanks and appreciation to everyone that helped us to test,
+// debug, stay awake late at night, and keep the coffee coming. 8~)
+
+block load
+{
+	// GunGame Language Options:
+	//
+	// "en" - English                   english
+	// "es" - Spanish (Español)         spanish
+	// "fr" - French (Français)         french
+	// "de" - German (Deutsch)          german
+	// "it" - Italian (Italiano)        italian
+	// "ko" - Korean                    korean
+	// "zh-cn" - Simplified Chinese     schinese
+	// "zh-tw" - Traditional Chinese    tchinese
+	// "ru" - Russian                   russian
+	// "th" - Thai                      thai
+	// "ja" - Japanese                  japanese
+	// "pt" - Portuguese (Português)    portuguese
+	// "pl" - Polish (Polski)           polish
+	// "da" - Danish (Dansk)            danish
+	// "nl" - Dutch (Nederlands)        dutch
+	// "fi" - Finnish (Suomi)           finnish
+	// "no" - Norwegian (Norsk)         norwegian
+	// "sv" - Swedish (Svenska)         swedish
+	//
+
+	es_xset gg_lang "en"
+	
+	// All other GunGame configuration settings are located in the config folder.  Find the config for your language
+	//   and edit the settings in it for your server.  /cstrike/cfg/gungame/
+	
+	
+	//##########################################################################
+	// DO NOT EDIT BELOW THIS LINE UNLESS YOU KNOW WHAT YOU ARE DOING!!!
+	// ALL OTHER GUNGAME SETTINGS ARE IN THE CONFIG DIRECTORY!
+	//##########################################################################
+
+	//SET CURRENT VERSION
+	es_xset eventscripts_gg "4.0.96 RC1"
+	es_xmakepublic eventscripts_gg
+	
+	//LOADING ANNOUNCEMENT
+	es_xmsg #multi #green [#lightgreenGunGame#green]#default Loading...
+	
+	
+	//INITIALIZE VARIABLES
+	es_xdoblock gungame4/init
+	
+	
+	//LOAD EVENTS
+	es_xloadevents declare addons/eventscripts/gungame4/events/es_gungame_events.res
+	
+	
+	//EXEC CONFIG
+	// Do not use es_mexec because the file cannot be edited while the server is running.
+	es_xformatv gg_lang_conf "gungame/gg_%1_config.cfg" gg_lang
+	es exec server_var(gg_lang_conf)
+	
+	
+	//DATABASE SETUP
+	//
+	es_xsql open gg_live ":memory:"
+	es_xsql query gg_live "PRAGMA auto_vacuum = 1"
+	//gg_live gg_players fields: name, userid, steamid, level, afk_rounds, is_afk, afk_x, eyeoffset, kills, levelup, give, deaths, wins
+	// NOTE: kills is used to calculate multikills, it IS NOT the total number of kills the player has made
+	// ADDTIONAL NOTE: kills is used in event gg_win for actual kills
+	es_xsql query gg_live "DROP TABLE IF EXISTS gg_players"
+	es_xset gg_live_create "CREATE TABLE IF NOT EXISTS gg_players(name varchar(31), userid int, steamid varchar(20), level int(2) DEFAULT 1, afk_rounds int(2) DEFAULT 0, is_afk int(1) DEFAULT 0, afk_x float DEFAULT 1, eyeoffset float DEFAULT 1, kills int(2) DEFAULT 0, levelup int(1) DEFAULT 0, give int(1) DEFAULT 0, deaths int DEFAULT 0, wins int DEFAULT 0)"
+	es_sql query gg_live server_var(gg_live_create)
+	
+	es_xsql open gg_database |gungame4/db
+	es_xsql query gg_database "PRAGMA auto_vacuum = 1"
+	//gg_database gg_players fields: name, steamid, wins, knife_kills, knife_deaths, nade_kills, nade_deaths, triple_levels, timestamp
+	es_xsql query gg_database "CREATE TABLE IF NOT EXISTS gg_players(name varchar(31), steamid varchar(20), wins int DEFAULT 0, knife_kills int DEFAULT 0, knife_deaths int DEFAULT 0, nade_kills int DEFAULT 0, nade_deaths int DEFAULT 0, triple_levels int DEFAULT 0, timestamp int)"
+	
+	
+	//LOAD DEPENDENCIES
+	//
+	// Setup gg_popup
+	es_xload gungame4/addons/gg_popup_lite
+	//
+	// Setup Crontab
+	es_xset gg_exists 0
+	es_xexists gg_exists script crontab
+	ifx false(gg_exists) do
+	{
+		es_xload crontab
+	}
+	
+	
+	//CRONTAB COMMANDS
+	crontab #daily "es_xdoblock gungame4/prune_database" prune_gg_db 0
+	
+	//SERVER COMMANDS
+	es_xset gg_exists 0
+	es_xexists gg_exists command gg_equip
+	ifx false(gg_exists) do
+	{
+		es_xregcmd gg_equip gungame4/equip_player "Internal GunGame command"
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists command gg_afk_loc
+	ifx false(gg_exists) do
+	{
+		es_xregcmd gg_afk_loc gungame4/gg_afk_loc "Internal GunGame command"
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists command gg_setweapons
+	ifx false(gg_exists) do
+	{
+		es_xregcmd gg_setweapons gungame4/gg_set_weapon_order "Allows changes to the weapon order: gg_setweapons <weapon>,<weapon>,<etc>"
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists command gg_getlevel
+	ifx false(gg_exists) do
+	{
+		es_xregcmd gg_getlevel gungame4/gg_getlevel "Gets a player's level: gg_getlevel <variable> <userid>"
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists command gg_getweapon
+	ifx false(gg_exists) do
+	{
+		es_xregcmd gg_getweapon gungame4/gg_getweapon "Gets a player's weapon level: gg_getweapon <variable> <userid>"
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists command gg_setlevel
+	ifx false(gg_exists) do
+	{
+		es_xregcmd gg_setlevel gungame4/gg_setlevel "Sets a player's level: gg_setlevel <userid> <level number>"
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists command gg_getwins
+	ifx false(gg_exists) do
+	{
+		es_xregcmd gg_getwins gungame4/gg_getwins "Gets a player's wins: gg_getwins <variable> <userid>"
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists command gg_levelup
+	ifx false(gg_exists) do
+	{
+		es_xregcmd gg_levelup gungame4/gg_levelup_cmd "Levels up a player one level: gg_levelup <userid> [victim userid]"
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists command gg_leveldown
+	ifx false(gg_exists) do
+	{
+		es_xregcmd gg_leveldown gungame4/gg_leveldown_cmd "Levels down a player one level: gg_leveldown <userid> [attacker userid]"
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists command gg_win
+	ifx false(gg_exists) do
+	{
+		es_xregcmd gg_win gungame4/gg_win_cmd "Triggers a game win: gg_win <userid> [loser userid]"
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists command gg_getmaxlevel
+	ifx false(gg_exists) do
+	{
+		es_xregcmd gg_getmaxlevel gungame4/gg_getmaxlevel_cmd "Gets the max level number and sets it to <var>: gg_getmaxlevel <var>"
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists command gg_reset_cmd
+	ifx false(gg_exists) do
+	{
+		es_xregcmd gg_reset_cmd gungame4/reset_cmd "Internal GunGame command"
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists command gg_getleaderlevel
+	ifx false(gg_exists) do
+	{
+		es_xregcmd gg_getleaderlevel gungame4/gg_getleaderlevel_cmd "Gets the leader's current level"
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists command gg_getleaderweapon
+	ifx false(gg_exists) do
+	{
+		es_xregcmd gg_getleaderweapon gungame4/gg_getleaderweapon_cmd "Gets the leader's current weapon level"
+	}
+	
+	
+	
+	
+	//SETUP PLAYER SAY/CLIENT COMMANDS
+	es_xregsaycmd !level "gungame4/gg_display_level" "Displays GunGame level info & a little more"
+	es_xregclientcmd !level "gungame4/gg_display_level" "Displays GunGame level info & a little more"
+	es_xregsaycmd !leader "gungame4/gg_display_leaders" "Displays the current leaders of GunGame"
+	es_xregclientcmd !leader "gungame4/gg_display_leaders" "Displays the current leaders of GunGame"
+	es_xregsaycmd !leaders "gungame4/gg_display_leaders" "Displays the current leaders of GunGame"
+	es_xregclientcmd !leaders "gungame4/gg_display_leaders" "Displays the current leaders of GunGame"
+	es_xregsaycmd !weapons "gungame4/gg_display_weapons" "Displays the weapon order"
+	es_xregclientcmd !weapons "gungame4/gg_display_weapons" "Displays the weapon order"
+	es_xregsaycmd !rules "gungame4/gg_display_rules" "Displays GunGame rules"
+	es_xregclientcmd !rules "gungame4/gg_display_rules" "Displays GunGame rules"
+	es_xregsaycmd !score "gungame4/gg_display_scores" "Displays GunGame scores"
+	es_xregclientcmd !score "gungame4/gg_display_scores" "Displays GunGame scores"
+	es_xregsaycmd !rank "gungame4/gg_display_ranks" "Displays GunGame ranks"
+	es_xregclientcmd !rank "gungame4/gg_display_ranks" "Displays GunGame ranks"
+	es_xregsaycmd !top "gungame4/gg_display_top" "Displays the top10"
+}
+
+
+block cont_setup
+{
+	//MENU SETUP
+	//
+	// Setup weapon menu
+	es_xload gungame4/menus/weapon_menu
+	// Setup rules menu
+	es_xload gungame4/menus/rules_menu
+	// Setup command menu
+	es_xload gungame4/menus/commands_menu
+	// Setup top menu
+	es_xload gungame4/menus/top_menu
+	
+	
+	//ADDON SETUP
+	//
+	// ***** gg_sounds_enable
+	es_xset gg_exists 0
+	es_xexists gg_exists script gungame4/addons/gg_sounds
+	ifx false(gg_exists) do
+	{
+		es_xload gungame4/addons/gg_sounds
+	}
+	// ***** gg_handicap
+	ifx true(gg_handicap) do
+	{
+		es_xset gg_exists 0
+		es_xexists gg_exists script gungame4/addons/gg_handicap
+		ifx false(gg_exists) do
+		{
+			es_xload gungame4/addons/gg_handicap
+		}
+	}
+	// ***** welcome_menu
+	ifx true(gg_join_msg) do
+	{
+		es_xset gg_exists 0
+		es_xexists gg_exists script gungame4/menus/welcome_menu
+		ifx false(gg_exists) do
+		{
+			es_xload gungame4/menus/welcome_menu
+		}
+	}
+	// ***** gg_triple_level
+	ifx true(gg_triple_on) do
+	{
+		es_xset gg_exists 0
+		es_xexists gg_exists script gungame4/addons/gg_triple_level
+		ifx false(gg_exists) do
+		{
+			es_xload gungame4/addons/gg_triple_level
+		}
+	}
+	// ***** gg_turbo
+	ifx true(gg_turbo) do
+	{
+		es_xset gg_exists 0
+		es_xexists gg_exists script gungame4/addons/gg_turbo_mode
+		ifx false(gg_exists) do
+		{
+			es_xload gungame4/addons/gg_turbo_mode
+		}
+	}
+	// ***** gg_knife_pro
+	ifx true(gg_knife_pro) do
+	{
+		es_xset gg_exists 0
+		es_xexists gg_exists script gungame4/addons/gg_knife_pro
+		ifx false(gg_exists) do
+		{
+			es_xload gungame4/addons/gg_knife_pro
+		}
+	}
+	// ***** gg_knife_elite
+	ifx true(gg_knife_elite) do
+	{
+		es_xset gg_exists 0
+		es_xexists gg_exists script gungame4/addons/gg_knife_elite
+		ifx false(gg_exists) do
+		{
+			es_xload gungame4/addons/gg_knife_elite
+		}
+	}
+	// ***** gg_deathmatch
+	ifx true(gg_deathmatch) do
+	{
+		es_xset gg_exists 0
+		es_xexists gg_exists script gungame4/addons/gg_deathmatch
+		ifx false(gg_exists) do
+		{
+			es_xload gungame4/addons/gg_deathmatch
+		}
+	}
+	// ***** gg_earn_nade
+	ifx true(gg_xtra_grenades) do
+	{
+		es_xset gg_exists 0
+		es_xexists gg_exists script gungame4/addons/gg_earn_nade
+		ifx false(gg_exists) do
+		{
+			es_xload gungame4/addons/gg_earn_nade
+		}
+	}
+	// ***** gg_unl_grenade
+	ifx true(gg_unl_grenades) do
+	{
+		es_xset gg_exists 0
+		es_xexists gg_exists script gungame4/addons/gg_unl_grenade
+		ifx false(gg_exists) do
+		{
+			es_xload gungame4/addons/gg_unl_grenade
+		}
+	}
+	// ***** gg_nade_bonus
+	ifx true(gg_nade_bonus) do
+	{
+		es_xset gg_exists 0
+		es_xexists gg_exists script gungame4/addons/gg_nade_bonus
+		ifx false(gg_exists) do
+		{
+			es_xload gungame4/addons/gg_nade_bonus
+		}
+	}
+	// ***** gg_noblock_enable
+	ifx true(gg_noblock_enable) do
+	{
+		es_xset gg_exists 0
+		es_xexists gg_exists script gungame4/addons/gg_noblock
+		ifx false(gg_exists) do
+		{
+			es_xload gungame4/addons/gg_noblock
+		}
+	}
+	// ***** gg_auto_ff
+	ifx true(gg_auto_ff) do
+	{
+		es_xset gg_exists 0
+		es_xexists gg_exists script gungame4/addons/gg_friendlyfire
+		ifx false(gg_exists) do
+		{
+			es_xload gungame4/addons/gg_friendlyfire
+		}
+	}
+	// ***** gg_stats_log
+	ifx true(gg_stats_log) do
+	{
+		es_xset gg_exists 0
+		es_xexists gg_exists script gungame4/addons/gg_stats
+		ifx false(gg_exists) do
+		{
+			es_xload gungame4/addons/gg_stats
+		}
+	}
+	// ***** gg_map_voting
+	ifx true(gg_voting) do
+	{
+		es_xset gg_exists 0
+		es_xexists gg_exists script gungame4/addons/gg_voting
+		ifx false(gg_exists) do
+		{
+			es_xload gungame4/addons/gg_voting
+		}
+	}
+	// ***** custom addons
+	es_xset gg_exists 0
+	es_xexists gg_exists script gungame4/addons/custom
+	ifx false(gg_exists) do
+	{
+		es_xload gungame4/addons/custom
+	}
+	
+	
+	//PLAYER SETUP
+	//
+	// Setup players that may already be connected so they can play.
+	foreach player gg_userid #all "es_xdoblock gungame4/player_prep_setup"
+	
+	
+	//MAP CONFIGS
+	ifx true(gg_warmup_weapon) do
+	{
+		es_xformatv gg_warmup_weapon "weapon_%1" gg_warmup_weapon
+	}
+	// Load es_map_start stuff
+	es_xdelayed 1 es_xdoblock gungame4/gg_start
+	
+	
+	//RESTART CURRENT MAP
+	mp_restartgame 2
+	es_xdelayed 1 es_xmsg #multi #green [#lightgreenGunGame#green]#default Loaded
+
+
+	// Create Leader Menu For First Use:
+	gg_popup exists gg_leader_menu
+	ifx false(gg_exists) do
+	{
+		es_xdoblock gungame4/create_leader_menu
+	}
+	
+	// Execute database pruning
+	crontab run prune_gg_db
+	
+	// Remove unnecessary crontabs
+	ifx false(gg_handicap_update) do
+	{
+		crontab del gg_handicap
+	}
+	ifx false(buy_announce) do
+	{
+		crontab del buylevel
+	}
+	ifx false(gg_turbo) do
+	{
+		crontab del gg_timelimit
+	}
+}
+
+block init
+{
+	//   Initialize variables used within the gg code here, include a short description,
+	//   and location where the variable is used within the script.
+	//sample:
+	//es_xset gg_lang 0          // Sets language to be used for all text, Location: block load
+	//
+	// Reserved vars:
+	// gg_database        --> Database used for all critical info, Location: block load
+	// gg_live            --> Database used for live noncritical info, Location: block load
+	// gg_live_create     --> Variable for creating the gg_live database, Location: block load
+	// gg_validweapons    --> Table used for valid weapon name check, Location: gg_live
+	// gg_weapons         --> Table containing the weapon order, Location: gg_live
+	// gg_players         --> Table name used in databases, Location: gg_live, gg_database
+	// gg_weapon_check    --> Temp keygroup created and used in es_weapon_menu
+	// gg_keygroup        --> Temp keygroup created and used in es_weapon_menu
+	// gg_rules1          --> Popup rules menu, Location: es_rules_menu
+	// gg_rules2          --> Popup rules menu page 2, Location: es_rules_menu
+	// gg_weaponpage*     --> Popup weapons menu, Location: es_weapon_menu
+	// gg_commands        --> Popup command menu, Location: es_commands_menu
+	// gg_popup_database  --> Popup database name, Location: es_gg_popup_lite
+	// gg_created_popups  --> Popup table in gg_popup_database, Location: es_gg_popup_lite
+	// gg_junk_keygroup   --> Temp keygroup in Popup, Location: es_gg_popup_lite
+	// gg_popup_select    --> Custom event, Location: es_gg_popup_lite
+	//
+	// init               --> Code block
+	// gg_start           --> Code block
+	// prune_database     --> Code block
+	// strip_weapons      --> Code block
+	// player_setup       --> Code block
+	// player_prep_setup  --> Code block
+	//
+	// gg_equip           --> Equip player command
+	// gg_popup           --> Popup command
+	// 
+	
+	es_xset gg_loaded 0 "Tells the script how it's being loaded, Location: config file"
+	es_xset gg_weapon_order 0 "Sets default server weapon order, Location: config file"
+	es_xset gg_random_weapon_order 0 "Allows random weapon order each map, Location: config file, es_weapon_menu"
+	es_xset gg_suicide_punish 0 "Sets suicide punishment, Location: config file"
+	es_xset gg_tk_punish 0 "Sets tk punishment, Location: config file"
+	
+	es_xset gg_handicap 0 "Sets handicap, Location: config file"
+	es_xset gg_map_obj 0 "Enables/disables map objectives and scoring, Location: config file"
+	es_xset gg_join_msg 0 "Enables/disables join message, Location: config file"
+	es_xset gg_multikill 0 "Number of kills required to levelup, Location: config file"
+	es_xset gg_afk_deaths 0 "Turns AFK manager on and sets number of deaths required for action, Location: config file"
+	
+	es_xset gg_afk_action 0 "Action to be taken for AFK players, Location: config file"
+	es_xset gg_warmup_timer 0 "Turns on the warmup round and sets the timer, Location: config file"
+	es_xset gg_warmup_weapon 0 "Sets the warmup round weapon, Location: config file"
+	es_xset gg_knife_pro 0 "Determines if gg_knife_pro is loaded, Location: config file"
+	es_xset gg_knife_pro_limit 0 "Level limiter applied to Knife Pro, Location: config file, es_knife_pro"
+	
+	es_xset gg_triple_on 0 "Determines if gg_triple_level bonus is loaded, Location: config file"
+	es_xset gg_turbo 0 "Determines if GunGame Turbo is loaded, Location: config file"
+	es_xset gg_knife_elite 0 "Determines if gg_knife_elite is loaded, Location: config file"
+	es_xset gg_deathmatch 0 "Determines if gg_deathmatch is loaded, Location: config file"
+	es_xset gg_retry_punish 0 "Number of levels players lose if they disconnect and reconnect on the same map, Location: config file"
+	
+	es_xset gg_sound_levelup 0 "Sound played to a player that levels up, Location: config file, es_map_start, gg_levelup"
+	es_xset gg_sound_leveldown 0 "Sound played to a player that levels down, Location: config file, es_map_start, gg_leveldown"
+	es_xset gg_sound_nade 0 "Sound played to all players at round_start when the leader is on nade level, Location: config file, es_map_start, round_start"
+	es_xset gg_sound_knife 0 "Sound played to all players at round start when the leader is on knife level, Location: config file, es_map_start, round_start"
+	es_xset gg_sound_welcome 0 "Sound played to a connecting player, Location: config file, es_map_start, player_spawn"
+	es_xset gg_sound_handicap 0 "Sound played to all players when the handicap system updates, Location: config file"
+	
+	es_xset gg_sound_levelsteal 0 "Sound played when a player steals a level, Location: config file"
+	es_xset gg_sound_winner 0 "Sound played to all players when someone wins, Location: config file, es_map_start, gg_win"
+	es_xset gg_sound_triple 0 "Sound emitted from player if the Triple Level, Location: config file, es_map_start"
+	es_xset gg_rand_song 0 "Enables/disables random winner songs, Location: config file, es_map_start"
+	es_xset gg_songlist 0 "Song list used for random winner songs, Location: config file, es_map_start"
+	
+	es_xset gg_prune_database 0 "Days of inactivity before player deletion, Location: config file"
+	es_xset gg_lang_conf 0 "Format config file language, Location: block load"
+	es_xset gg_userid 0 "Temp userid, Location: block load, player_activate, player_setup, es_gg_popup_lite"
+	es_xset gg_attackerid 0 "Temp attacker userid, Location: player_death"
+	es_xset gg_steamid 0 "Temp steamid, Location: player_activate, player_prep_setup, player_setup"
+	es_xset gg_index 0 "Temp index, Location: win_view"
+	
+	es_xset gg_query 0 "Temp SQL query statement, Location: player_setup, es_weapon_menu, es_gg_popup_lite"
+	es_xset gg_username 0 "Temp username, Location: player_activate, player_prep_setup, player_setup"
+	es_xset gg_tmp 0 "Temp variable holder, Location: player_setup, player_disconnect"
+	es_xset gg_tmp2 0 "Temp variable holder, Location: player_death"
+	es_xset gg_tmp3 0 "Temp variable holder"
+	es_xset gg_tmp4 0 "Temp variable holder"
+	es_xset gg_tmp5 0 "Temp variable holder"
+	es_xset gg_exists 0 "Variable used to check to see if scripts/etc exist, Location: es_weapon_menu, es_gg_popup_lite"
+	es_xset gg_tempcount 0 "Temp weapon count, Location: round_start, strip_weapons"
+	
+	es_xset gg_command 0 "Temp command name, Location: strip_weapons"
+	es_xset gg_user_lvl 0 "Player level, Location: equip_player"
+	es_xset gg_user_wpn 0 "Player weapon, Location: equip_player"
+	es_xset gg_attacker_lvl 0 "Attacker level, Location: player_death"
+	es_xset gg_attacker_wpn 0 "Attacker weapon, Location: player_death"
+	
+	es_xset gg_user_x 0 "User x coordinate, Location: player_spawn, player_death"
+	es_xset gg_user_y 0 "User y coordinate, Location: player_spawn, player_death"
+	es_xset gg_user_z 0 "User z coordinate, Location: player_spawn, player_death"
+	es_xset gg_dead_x 0 "User x coordinate for afk check, Location: player_death"
+	es_xset gg_dead_y 0 "User y coordinate for afk check, Location: player_death"
+	es_xset gg_user_afk 0 "User afk variable, Location: player_death"
+	
+	es_xset gg_user_afk_rounds 0 "User count of continuous afk rounds, Location: player_death"
+	es_xset gg_p_kills 0 "Player's valid kills this round, Location: player_death"
+	es_xset gg_wins 0 "Players win total, Location: gg_win"
+	es_xset gg_rank 0 "Player rank, Location: gg_display_ranks"
+	es_xset gg_bomber 0 "Userid of bomb carrier, Location: bomb_pickup, bomb_dropped, bomb_planted, es_gg_knife_elite"
+	es_xset gg_team 0 "Temp user team variable, Location: equip_player, es_gg_knife_elite"
+
+	es_xset gg_leader_lvl 1 "The highest level (leader level) from gg_live, Location: event gg_levelup"
+	es_xset gg_leader_count 0 "The number of leaders (players tied on the leading level), Location: block gg_display_level,event gg_levelup"
+	es_xset gg_leader_names "   * There currently is no leader" "Used to format the !level menu to add the leader name or names, Location: block gg_display_level,event gg_levelup"
+	es_xset gg_leader_name_tmp 0 "Used as a temporary holder to format the leader names into a variable, Location: block format_leaders"
+	es_xset gg_p_lvlsbehind 0 "Calculates how many levels behind the leader a player is, Location: block gg_display_level"
+	
+	es_xset gg_p_wins 0 "Retrieves how many wins a player has, Location: block gg_display_level"
+	es_xset gg_level_menumsg 0 "Used to format the text for the !level command, Location: block gg_display_level"
+	es_xset gg_tmp_leadermsg 0 "Used to tell the player if they are leading, tied, or behind the leader, Location: block gg_display_level"
+	es_xset gg_p_lvl 0 "Used to retrieve the player's level from the database, Location: block gg_display_level"
+	es_xset gg_p_wpn 0 "Used to retrieve the player's weapon from the database, Location: block gg_display_level"
+	
+	es_xset gg_delay 0 "Determines the delay for spawning, stripping, and giving weapons, Location: player_spawn, gg_spawngive"
+	es_xset gg_validweapon_names 0 "List of valid weapon names, Location: es_weapon_menu"
+	es_xset gg_levels 0 "How many levels there are (determined by using es_token on 'gg_weapon_order'), Location: es_weapon_menu"
+	es_xset gg_tmp_weapon 0 "The name of the weapon pulled from 'gg_weapon_order' using es_token, Location: es_weapon_menu"
+	es_xset gg_weapon_check 0 "Used for performing an SQL query to see if the weapon name was spelled properly, Location: es_weapon_menu"
+	
+	es_xset gg_typo_format 0 "Used for formatting to replace typos in 'gg_weapon_order', Location: es_weapon_menu"
+	es_xset gg_level_counter 0 "Used to count the number of levels while running loops to build menus/lists, Location: es_weapon_menu"
+	es_xset gg_menuname_format 0 "Used to format menus to be used by popup, Location: es_weapon_menu"
+	es_xset gg_menuline_format 0 "Used to format lines in a menu to be used by popup, Location: es_weapon_menu"
+	es_xset gg_submenuname_format 0 "Used to format the name of a submenu to be used by popup, Location: es_weapon_menu"
+	
+	es_xset gg_tempkey 0 "Used to retrieve the key name while using es_foreachkey, Location: es_weapon_menu"
+	es_xset gg_level 0 "Used to retrieve the level # of the weapon while formatting menus, Location: es_weapon_menu"
+	es_xset gg_weapon 0 "Used to retrieve the weapon while formatting menus, Location: es_weapon_menu"
+	es_xset gg_weaponmenu_pagecount 0 "How many pages are in the weapon menu, Location: es_weapon_menu"
+	es_xset gg_limit_start 0 "Used for altering the SQL query to change the LIMIT that is returned, Location: es_weapon_menu"
+	
+	es_xset gg_blanklines 0 "Used for calculating how many blank lines need to be added to keep the menu the same size, Location: es_weapon_menu"
+	es_xset gg_tmp_weapon_order 0 "Used for weapon order changes, Location: gg_set_weapon_order"
+	es_xset gg_live_round 0 "Shows live round status, 1= live, 0= dead, Location: round_start, round_end, player_spawn"
+	es_xset gg_one_winner 0 "Limiter allowing only one winner per map, Location: es_map_start, gg_levelup"
+	es_xset gg_default_weapon_order "glock,usp,p228,deagle,fiveseven,elite,m3,xm1014,tmp,mac10,mp5navy,ump45,p90,galil,famas,ak47,scout,m4a1,sg552,aug,m249,hegrenade,knife"
+	
+	es_xset gg_warmup_started 0 "Warmup round status line, Location: gg_start, warmup_start"
+	es_xset gg_warmup_counter 0 "Warmup countdown timer, Location: warmup_start"
+	es_xset gg_dm_spawn_protect 0 "Spawn protection, Location: config file"
+	es_xset gg_dm_remove_protect 0 "Spawn protection removal, Location: config file"
+	es_xset gg_dm_spawntime 0 "Respawn delay, Location: config file"
+	
+	es_xset gg_unl_grenades 0 "Unlimited hegrenades addon, Location: config file"
+	es_xset gg_xtra_grenades 0 "Earn extra grenades, Location: config file"
+	es_xset gg_handicap_update 0 "Handicap update cronjob, Location: config file"
+	es_xset gg_noblock_enable 0 "Noblock addon, Location: config file"
+	es_xset gg_stats_log 0 "Stats addon, Location: config file"
+	es_xset gg_auto_ff 0 "Auto friendlyfire settings, Location: config file"
+	
+	es_xset gg_victimid 0 "Temp victim userid, Location: gg_levelup"
+	es_xset gg_kills 0 "Temp kill count, Location: gg_win"
+	es_xset gg_deaths 0 "Temp death count, Location gg_win"
+	es_xset gg_winner_display 0 "Winner display options, Location: config file"
+	es_xset gg_winner_url 0 "PHP file URL location for winner display, Location: config file"
+	es_xset gg_tmp_url 0 "Temp url holder"
+	
+	es_xset gg_nade_bonus 0 "Grenade bonus addon, Location: config file"
+	es_xset gg_total 0 "Total ranks, Location: gg_display_ranks"
+	es_xset gg_top_total 0 "Total sent to !top command"
+	es_xset gg_menu_pages 0 "Menu pages"
+	es_xset gg_menu_pagecount 0 "Menu page count"
+	es_xset gg_page_counter 0 "Menu page counter"
+	
+	es_xset gg_voting 0 "End of map voting feature, Location: config file"
+	es_xset gg_vote_options 0 "Map vote options, Location: config file"
+	es_xset gg_victimname 0 "Victim name, Location: gg_levelup"
+	es_xset gg_attackername 0 "Attacker name, Location: gg_leveldown"
+	
+	//Variables used in gg_popup_lite
+	es_xset gg_popup_command 0 "Used to verify that the command in gg_popup is a valid command, Location: es_gg_popup_lite"
+	es_xset gg_format 0 "Used for temporary formatting needs for error messages and es_doblock commands, Location: es_gg_popup_lite"
+	es_xset gg_popup_argc 0 "Checks the number of arguments in the gg_popup command, Location: es_gg_popup_lite"
+	es_xset gg_popup_menuname 0 "Checks the name of the menu being worked with, Location: es_gg_popup_lite"
+	es_xset gg_popup_line 0 "Used to store the text for gg_popup addline, Location: es_gg_popup_lite"
+	es_xset gg_popup_duration 0 "Used to store the duration of the popup, Location: es_gg_popup_lite"
+	es_xset gg_popup_menuselectkeys 0 "Used for storing the gg_popup setvalidkeys keys, Location: es_gg_popup_lite"
+	es_xset gg_popup_submenuname 0 "Used for storing the popup submenu name, Location: es_gg_popup_lite"
+	es_xset gg_popup_linetext 0 "Used for retrieving the popup text when sending the popup or caching the popup, Location: es_gg_popup_lite"
+	es_xset gg_menu_format 0 "Used for formatting the menu in special cases adding \n etc., Location: es_gg_popup_lite"
+	es_xset gg_active_menuname 0 "Stores the active menu name, Location: es_gg_popup_lite"
+	es_xset gg_selection 0 "Stores the menuselect number chosen by the player, Location: es_gg_popup_lite"
+	es_xset gg_keytemp 0 "Temporary key holder used in formatting of menus, Location: es_gg_popup_lite"
+	es_xset gg_leader_text 0 "Used to format the text inserted into gg_leader_menu, Location: gg_levelup"
+	es_xset gg_leader_wpn 0 "Finds the leader(s) weapon name, Location: gg_levelup gg_levedown"
+	
+	//Weapon names to be removed from map
+	es_xset gg_killweapon 0 "Used to remove weapons from a map, Location: strip_weapons"
+	es_xset gg_stripweapons "weapon_glock,weapon_usp,weapon_p228,weapon_deagle,weapon_fiveseven,weapon_elite,weapon_m3,weapon_xm1014,weapon_tmp,weapon_mac10,weapon_mp5navy,weapon_ump45,weapon_p90,weapon_galil,weapon_famas,weapon_ak47,weapon_scout,weapon_m4a1,weapon_sg552,weapon_aug,weapon_m249,weapon_hegrenade,weapon_g3sg1,weapon_sg550,weapon_awp"
+}
+
+
+event es_map_start
+{
+	// Reload weapons
+	ifx true(gg_random_weapon_order) do
+	{
+		es_xload gungame4/menus/weapon_menu
+	}
+	
+	// Load custom events
+	es_xloadevents declare addons/eventscripts/gungame4/events/es_gungame_events.res
+	
+	// Reset round status
+	es_xset gg_live_round 0
+	es_xset gg_warmup_started 0
+	
+	// Reset leader
+	es_xset gg_leader_lvl 1
+	
+	
+	// Setup live database
+	es_xsql query gg_live "DROP TABLE IF EXISTS gg_players"
+	es_sql query gg_live server_var(gg_live_create)
+	
+	es_xdoblock gungame4/gg_start
+	
+	//EXEC MAP CONFIG
+	es_xdelayed 1 gg_map_setup
+}
+
+block gg_start
+{
+	// Reset winner limiter
+	es_xset gg_one_winner 0
+
+	// Execute warmup round code if needed
+	if (server_var(gg_warmup_timer) > 0) do
+	{
+		es_xset gg_warmup_started 1
+		es_xcopy gg_warmup_counter gg_warmup_timer
+		es_xdoblock gungame4/warmup_start
+		ifx false(gg_unl_grenades) do
+		{
+			es_xset gg_exists 0
+			es_xexists gg_exists script gungame4/addons/gg_unl_grenade
+			ifx false(gg_exists) do
+			{
+				es_xload gungame4/addons/gg_unl_grenade
+			}
+		}
+	}
+	else do
+	{
+		es_xevent initialize gg_start
+		es_xevent fire gg_start
+		
+		// Start afk loop
+	    es_xdelayed 3 es_xdoblock gungame4/gg_afk_loop
+	}
+}
+
+block warmup_start
+{
+	es_centermsg Warmup round: server_var(gg_warmup_counter) seconds left
+	es_xmath gg_warmup_counter - 1
+	if (server_var(gg_warmup_counter) == 0) do
+	{
+		es_xdelayed .8 es_xset gg_warmup_started 0
+		es_xdelayed .8 es_xset gg_live_round 0
+		mp_restartgame 1
+		ifx false(gg_unl_grenades) do
+		{
+			es_xset gg_exists 0
+			es_xexists gg_exists script gungame4/addons/gg_unl_grenade
+			ifx true(gg_exists) do
+			{
+				es_xunload gungame4/addons/gg_unl_grenade
+			}
+		}
+		es_xevent initialize gg_start
+		es_xevent fire gg_start
+		
+		// Start afk loop
+	    es_xdelayed 3 es_xdoblock gungame4/gg_afk_loop
+	}
+	ifx true(gg_warmup_counter) do
+	{
+	    es_xdelayed 1 es_xdoblock gungame4/warmup_start
+	}
+}
+
+block prune_database
+{
+	// Prune database
+	ifx true(gg_prune_database) do
+	{
+		es_xlog " "
+		es_xlog [GunGame] Pruning database...
+		es_xformatqv gg_query "DELETE FROM gg_players WHERE timestamp < strftime('%s','now', '-%1 days')" gg_prune_database
+		es_sql query gg_database server_var(gg_query)
+		es_xlog [GunGame] Database pruning complete
+		es_xlog " "
+	}
+}
+
+event round_start
+{
+	// Round start code
+	// Remove Weapons Built Into Map & Disable Buyzones
+	es_xgetuserid gg_userid
+	es_fire server_var(gg_userid) func_buyzone disable
+	es_xset gg_tempcount 0
+	while "server_var(gg_tempcount) < 25" "es_xdoblock gungame4/strip_weapons"
+	
+	// Disable objectives
+	ifx false(gg_map_obj) do
+	{
+		es_fire server_var(gg_userid) func_bomb_target Disable
+		es_fire server_var(gg_userid) func_hostage_rescue Disable
+		es_fire server_var(gg_userid) weapon_c4 Kill
+		es_fire server_var(gg_userid) hostage_entity Kill
+	}
+	
+	// Reset levelup counts
+	es_xsql query gg_live "UPDATE gg_players SET levelup = '0'"
+	
+	// Reset entities
+	es_xdelayed 1 es_xdoblock gungame4/equip_entity
+}
+
+event round_freeze_end
+{
+    // Set live round status
+	es_xdelayed .5 es_xset gg_live_round 1
+}
+
+block strip_weapons
+{
+	//Remove Weapons Built Into Map
+	es_xmath gg_tempcount + 1
+	es_token gg_killweapon server_var(gg_stripweapons) server_var(gg_tempcount) ,
+	es_xformatv gg_command "%1 %2 kill" gg_userid gg_killweapon
+	esnq es_xfire server_var(gg_command)
+}
+
+event weapon_fire
+{
+	es_format gg_query "UPDATE gg_players SET is_afk = '0', afk_rounds = '0' WHERE userid = '%1'" event_var(userid)
+	es_sql query gg_live server_var(gg_query)
+}
+
+event round_end
+{
+	// Set live round status
+	// Needs a delay so c4 bombs do not cause suicides
+	es_xdelayed .2 es_xset gg_live_round 0
+	
+	// Round end code
+	es_xset gg_bomber 0
+	
+	// Fix entity
+	es_xdoblock gungame4/equip_entity
+}
+
+block equip_entity
+{
+	es_xgetuserid gg_userid
+	es_xremove game_player_equip
+	es_give server_var(gg_userid) game_player_equip
+	es_fire server_var(gg_userid) game_player_equip addoutput "weapon_knife 1"
+	es_fire server_var(gg_userid) game_player_equip addoutput "item_assaultsuit 1"
+}
+
+
+// Setup connecting players to use the player_setup block.
+event player_activate
+{
+	// Player activation code
+	es_set gg_userid event_var(userid)
+	es uniqueid gg_steamid event_var(userid) 1
+	es_getplayername gg_username event_var(userid)
+	es_xdoblock gungame4/player_setup
+}
+
+// Setup players that are already connected to the server to be able to use the player_setup block.
+block player_prep_setup
+{
+	es uniqueid gg_steamid server_var(gg_userid) 1
+	es_getplayername gg_username server_var(gg_userid)
+	es_xdoblock gungame4/player_setup
+}
+
+// Player setup for every player on the server
+block player_setup
+{
+	//GG_DATABASE setup
+	es_xformatqv gg_query "SELECT steamid FROM gg_players WHERE steamid = '%1'" gg_steamid
+	es_sql queryvalue gg_database gg_tmp server_var(gg_query)
+	ifx true(gg_tmp) do
+	{
+		// Player already exists in database
+		es_xformatqv gg_query "UPDATE gg_players SET timestamp = strftime('%s','now'), name = '%1' WHERE steamid = '%2'" gg_username gg_steamid
+		es_sql query gg_database server_var(gg_query)
+	}
+	else do
+	{
+		// Player does not exist in database
+		es_xformatqv gg_query "INSERT INTO gg_players ('name', 'steamid', 'timestamp') VALUES ('%1', '%2', strftime('%s','now'))" gg_username gg_steamid
+		es_sql query gg_database server_var(gg_query)
+	}
+	
+	//GG_LIVE setup
+	es_xformatqv gg_query "SELECT steamid FROM gg_players WHERE steamid = '%1'" gg_steamid
+	es_sql queryvalue gg_live gg_tmp server_var(gg_query)
+	ifx true(gg_tmp) do
+	{
+		// Player already exists in database
+		es_xformatqv gg_query "UPDATE gg_players SET afk_rounds = '0', name = '%1', userid = '%2' WHERE steamid = '%3'" gg_username gg_userid gg_steamid
+		es_sql query gg_live server_var(gg_query)
+	}
+	else do
+	{
+		// Player does not exist in database
+		es_xformatqv gg_query "INSERT INTO gg_players ('name', 'userid', 'steamid') VALUES ('%1', '%2', '%3')" gg_username gg_userid gg_steamid
+		es_sql query gg_live server_var(gg_query)
+	}
+	
+	//Add rank to GG_LIVE
+	es_xformatqv gg_query "SELECT wins FROM gg_players WHERE steamid = '%1'" gg_steamid
+	es_sql queryvalue gg_database gg_tmp server_var(gg_query)
+	ifx true(gg_tmp) do
+	{
+		es_xformatqv gg_query "SELECT COUNT(*) FROM gg_players WHERE wins > '%1'" gg_tmp
+		es_sql queryvalue gg_database gg_tmp server_var(gg_query)
+		es_xmath gg_tmp + 1
+	}
+	else do
+	{
+		es_sql queryvalue gg_database gg_tmp "SELECT COUNT(*) FROM gg_players"
+	}
+}
+
+event player_changename
+{
+	es uniqueid gg_steamid event_var(userid) 1
+	es_set gg_tmp event_var(newname)
+	es_xformatqv gg_query "UPDATE gg_players SET name = '%1' WHERE steamid = '%2'" gg_tmp gg_steamid
+	es_sql query gg_database server_var(gg_query)
+	es_sql query gg_live server_var(gg_query)
+}
+
+event player_disconnect
+{
+	es_set gg_userid event_var(userid)
+	es_isbot gg_tmp server_var(gg_userid)
+	ifx false(gg_tmp) do
+	{
+		// Player disconnect code
+		ifx true(gg_retry_punish) do
+		{
+			es gg_getlevel gg_user_lvl server_var(gg_userid)
+			if (server_var(gg_user_lvl) > 1) do
+			{
+				es_math gg_user_lvl - server_var(gg_retry_punish)
+				if (server_var(gg_user_lvl) < 1) then es_xset gg_user_lvl 1
+				es gg_setlevel server_var(gg_userid) server_var(gg_user_lvl)
+			}
+		}
+	}
+	else do
+	{
+		es_xformatqv gg_query "DELETE FROM gg_players WHERE userid = '%1'" gg_userid
+		es_sql query gg_live server_var(gg_query)
+	}
+}
+
+event player_spawn
+{
+	// Only process if player is actually playing
+	if (event_var(es_userteam) > 1) do
+	{
+		ifx false(gg_warmup_started) do
+		{
+			es_delayed 0.01 gg_equip event_var(userid) event_var(es_userteam)
+			es_delayed 1 gg_afk_loc event_var(userid)
+		}
+		else do
+		{
+			ifx true(gg_warmup_weapon) do
+			{
+				if (server_var(gg_warmup_weapon) != "weapon_knife") do
+				{
+					es_delayed 0.01 es_xgive event_var(userid) server_var(gg_warmup_weapon)
+				}
+			}
+			else do
+			{
+				es_delayed 0.01 gg_equip event_var(userid) event_var(es_userteam)
+			}
+		}
+		// Set is_afk
+		if (event_var(es_steamid) != "BOT") do
+		{
+			es_set gg_userid event_var(userid)
+			es_xformatqv gg_query "UPDATE gg_players SET is_afk = '1', afk_x = '0' WHERE userid = '%1'" gg_userid
+			es_sql query gg_live server_var(gg_query)
+		}
+	}
+}
+
+
+block gg_afk_loc
+{
+	es_xgetargv gg_userid 1
+	// Add player viewangle to gg_live for AFK check
+	es_getplayerprop gg_tmp server_var(gg_userid) "CCSPlayer.m_angEyeAngles[1]"
+	//es_getplayerprop gg_user_y server_var(gg_userid) "CCSPlayer.m_angEyeAngles[0]"
+	es_getplayerlocation gg_user_x gg_user_y gg_user_z server_var(gg_userid)
+	es_xformatqv gg_query "UPDATE gg_players SET eyeoffset = '%1', afk_x = '%2' WHERE userid = '%3'" gg_tmp gg_user_x gg_userid
+	es_sql query gg_live server_var(gg_query)
+}
+
+
+block gg_afk_loop
+{
+	ifx false(gg_warmup_started) do
+	{
+	    ifx true(gg_live_round) do
+	    {
+	        es_sql queryvalue gg_live gg_tmp "SELECT COUNT(userid) FROM gg_players WHERE is_afk = '1'"
+		    ifx true(gg_tmp) do
+		    {
+    			es_sql query gg_live gg_tmp_keygroup "SELECT userid FROM gg_players WHERE is_afk = '1'"
+			    es_xforeachkey gg_tmp_key in gg_tmp_keygroup "es_xdoblock gungame4/gg_afk_check"
+			    es_xkeygroupdelete gg_tmp_keygroup
+		    }
+		}
+	}
+	es_xdelayed 1 es_xdoblock gungame4/gg_afk_loop
+}
+
+
+block gg_afk_check
+{
+	// AFK check
+	es_keygetvalue gg_userid gg_tmp_keygroup server_var(gg_tmp_key) userid
+	es_getplayerprop gg_user_y server_var(gg_userid) "CCSPlayer.m_angEyeAngles[1]"
+	es_getplayerlocation gg_user_x gg_tmp gg_tmp2 server_var(gg_userid)
+			
+	es_xformatqv gg_query "SELECT afk_x FROM gg_players WHERE userid = '%1'" gg_userid
+	es_sql queryvalue gg_live gg_dead_x server_var(gg_query)
+	
+	ifx true(gg_dead_x) do
+	{
+		es_xformatqv gg_query "SELECT eyeoffset FROM gg_players WHERE userid = '%1'" gg_userid
+		es_sql queryvalue gg_live gg_dead_y server_var(gg_query)
+		es_math gg_user_x + server_var(gg_user_y)
+		es_math gg_dead_x + server_var(gg_dead_y)
+		es inrange gg_tmp server_var(gg_user_x) 1 server_var(gg_dead_x)
+		ifx false(gg_tmp) do
+		{
+			es_xformatqv gg_query "UPDATE gg_players SET is_afk = '0', afk_rounds = '0' WHERE userid = '%1'" gg_userid
+			es_sql query gg_live server_var(gg_query)
+		}
+	}
+}
+
+
+event player_team
+{
+	es_set gg_userid event_var(userid)
+	es_xformatqv gg_query "UPDATE gg_players SET is_afk = '0', afk_rounds = '0' WHERE userid = '%1'" gg_userid
+	es_sql query gg_live server_var(gg_query)
+}
+
+
+block equip_player
+{
+	es_xgetargv gg_userid 1
+	es_xgetargv gg_team 2
+	es_xformatqv gg_query "SELECT level FROM gg_players WHERE userid = '%1'" gg_userid
+	es_sql queryvalue gg_live gg_user_lvl server_var(gg_query)
+	es_xformatqv gg_query "SELECT weapon_name FROM gg_weapons WHERE level = '%1'" gg_user_lvl
+	es_sql queryvalue gg_live gg_user_wpn server_var(gg_query)
+	
+	// If player is not on knife level, equip
+	if (server_var(gg_user_wpn) != "weapon_knife") do
+	{
+		es_give server_var(gg_userid) server_var(gg_user_wpn)
+	}
+	else do
+	{
+		es_delayed 0.01 es_xsexec server_var(gg_userid) use weapon_knife
+	}
+	ifx true(gg_map_obj) do
+	{
+		if (server_var(gg_userid) == server_var(gg_bomber)) then es_xsoon es_xgive server_var(gg_userid) weapon_c4
+		if (server_var(gg_team) == 3) then es_xsoon es_xsetplayerprop server_var(gg_userid) CCSPlayer.m_bHasDefuser 1
+	}
+	
+	// Hud hint
+	es_xformatqv gg_query "SELECT weapon FROM gg_weapons WHERE level = '%1'" gg_user_lvl
+	es_sql queryvalue gg_live gg_user_wpn server_var(gg_query)
+	es_xformatv gg_tmp "Current level: %1 of %2\nCurrent weapon: %3" gg_user_lvl gg_levels gg_user_wpn
+	//es usermsg hudhint server_var(gg_userid) server_var(gg_tmp)
+	es_xusermsg create hudhint HintText
+    es_xusermsg write short hudhint -1
+    es_usermsg write string hudhint server_var(gg_tmp)
+    es_usermsg send hudhint server_var(gg_userid)
+    es_xusermsg delete hudhint
+}
+
+event player_death
+{
+	// Player death code
+	
+	// *************
+	// BASIC GUNGAME
+	// *************
+	//
+	// Skip everything if the warmup round is going
+	ifx false(gg_warmup_started) do
+	{
+		es_set gg_userid event_var(userid)
+		es_set gg_attackerid event_var(attacker)
+	
+		// AFK check
+		es_xformatqv gg_query "SELECT is_afk FROM gg_players WHERE userid = '%1'" gg_userid
+		es_sql queryvalue gg_live gg_user_afk server_var(gg_query)
+		
+		// Get attacker level and weapon name
+		if (event_var(attacker) != 0) do
+		{
+			// Setup for Multi Kill mode
+			if (server_var(gg_multikill) > 1) do
+			{
+				es_xformatqv gg_query "SELECT kills FROM gg_players WHERE userid = '%1'" gg_attackerid
+				es_sql queryvalue gg_live gg_p_kills server_var(gg_query)
+			}
+			
+			// Get attacker level and weapon
+			es_xformatqv gg_query "SELECT level FROM gg_players WHERE userid = '%1'" gg_attackerid
+			es_sql queryvalue gg_live gg_attacker_lvl server_var(gg_query)
+			es_xformatqv gg_query "SELECT weapon FROM gg_weapons WHERE level = '%1'" gg_attacker_lvl
+			es_sql queryvalue gg_live gg_attacker_wpn server_var(gg_query)
+		
+		
+			// Kill checks
+			if (event_var(es_userteam) != event_var(es_attackerteam)) do
+			{
+				ifx false(gg_user_afk) do
+				{
+					if (event_var(weapon) == server_var(gg_attacker_wpn)) do
+					{
+						if (server_var(gg_multikill) < 2) do
+						{
+							// Levelup attacker
+							es_xmathparse gg_tmp "gg_attacker_lvl + 1"
+							es_xevent initialize gg_levelup
+							es_event setint gg_levelup userid event_var(attacker)
+							es_event setint gg_levelup victim event_var(userid)
+							es_event setstring gg_levelup steamid event_var(es_attackersteamid)
+							es_event setint gg_levelup old_level server_var(gg_attacker_lvl)
+							es_event setint gg_levelup new_level server_var(gg_tmp)
+							es_event setstring gg_levelup team event_var(es_attackerteam)
+							es_event setstring gg_levelup name event_var(es_attackername)
+							es_event setstring gg_levelup victimname event_var(es_username)
+							es_xevent fire gg_levelup
+						}
+						else do
+						{
+							es_xmath gg_p_kills + 1
+							if (server_var(gg_attacker_wpn) == "hegrenade") then es_xcopy gg_p_kills gg_multikill
+							if (server_var(gg_attacker_wpn) == "knife") then es_xcopy gg_p_kills gg_multikill
+							if (server_var(gg_p_kills) == server_var(gg_multikill)) do
+							{
+								// Levelup attacker
+								es_xmathparse gg_tmp "gg_attacker_lvl + 1"
+								es_xevent initialize gg_levelup
+								es_event setint gg_levelup userid event_var(attacker)
+								es_event setint gg_levelup victim event_var(userid)
+								es_event setstring gg_levelup steamid event_var(es_attackersteamid)
+								es_event setint gg_levelup old_level server_var(gg_attacker_lvl)
+								es_event setint gg_levelup new_level server_var(gg_tmp)
+								es_event setint gg_levelup team event_var(es_attackerteam)
+								es_event setstring gg_levelup name event_var(es_attackername)
+								es_event setstring gg_levelup victimname event_var(es_username)
+								es_xevent fire gg_levelup
+							}
+							else do
+							{
+								es_xformatqv gg_query "UPDATE gg_players SET kills = '%1' WHERE userid = '%2'" gg_p_kills gg_attackerid
+								es_sql query gg_live server_var(gg_query)
+								
+								es_playsound event_var(attacker) "common/stuck1.wav" 1.0
+								
+								// HUD hint message
+								es_xformatv gg_tmp "Kills this level: %1 of %2" gg_p_kills gg_multikill
+								//es usermsg hudhint event_var(attacker) server_var(gg_tmp)
+                                es_xusermsg create hudhint HintText
+                                es_xusermsg write short hudhint -1
+                                es_usermsg write string hudhint server_var(gg_tmp)
+                                es_usermsg send hudhint event_var(attacker)
+                                es_xusermsg delete hudhint
+							}
+						}	
+					}
+				}
+				else do
+				{
+					// Victim was afk
+					es_format gg_tmp "%1 was AFK\n Your kill did not count!!" event_var(es_username)
+					es_menu 5 event_var(attacker) server_var(gg_tmp)
+					
+					ifx true(gg_afk_deaths) do
+					{
+						es_xformatqv gg_query "SELECT afk_rounds FROM gg_players WHERE userid = '%1'" gg_userid
+						es_sql queryvalue gg_live gg_user_afk_rounds server_var(gg_query)
+						es_xmath gg_user_afk_rounds + 1
+						if (server_var(gg_user_afk_rounds) >= server_var(gg_afk_deaths)) do
+						{
+							if (server_var(gg_afk_action) == 1) then kickid event_var(userid) "AFK too long."
+							if (server_var(gg_afk_action) == 2) do
+							{
+								es_fire event_var(userid) !self setteam 1
+								es_menu 0 event_var(userid) "You were switched to Spectator\n for being AFK!\n \n----------\n->0. Exit"
+							}
+						}
+						else do
+						{
+							es_xformatqv gg_query "UPDATE gg_players SET afk_rounds = '%1' WHERE userid = '%2'" gg_user_afk_rounds gg_userid
+							es_sql query gg_live server_var(gg_query)
+						}
+					}
+				}
+			}
+			else do
+			{
+				if (event_var(userid) == event_var(attacker)) do
+				{
+					// Player committed suicide
+					ifx true(gg_suicide_punish) do
+					{
+						// Suicide code here
+						// Initialize event gg_leveldown
+						es_xmathparse gg_tmp "gg_attacker_lvl - gg_suicide_punish"
+						if (server_var(gg_tmp) <= 0) then es_xset gg_tmp 1
+						es_xevent initialize gg_leveldown
+						es_event setint gg_leveldown userid event_var(userid)
+						es_event setint gg_leveldown attacker event_var(attacker)
+						es_event setstring gg_leveldown steamid event_var(es_steamid)
+						es_event setint gg_leveldown old_level server_var(gg_attacker_lvl)
+						es_event setint gg_leveldown new_level server_var(gg_tmp)
+						es_event setint gg_leveldown team event_var(es_userteam)
+						es_event setstring gg_leveldown name event_var(es_username)
+						es_event setstring gg_leveldown attackername event_var(es_attackername)
+						es_xevent fire gg_leveldown
+					}
+				}
+				else do
+				{
+					// Player killed a teammate
+					ifx true(gg_tk_punish) do
+					{
+						// TK code here
+						// Initialize event gg_leveldown
+						es_xmathparse gg_tmp "gg_attacker_lvl - gg_tk_punish"
+						if (server_var(gg_tmp) <= 0) then es_xset gg_tmp 1
+						es_xevent initialize gg_leveldown
+						es_event setint gg_leveldown userid event_var(attacker)
+						es_event setint gg_leveldown attacker event_var(attacker)
+						es_event setstring gg_leveldown steamid event_var(es_attackersteamid)
+						es_event setint gg_leveldown old_level server_var(gg_attacker_lvl)
+						es_event setint gg_leveldown new_level server_var(gg_tmp)
+						es_event setint gg_leveldown team event_var(es_attackerteam)
+						es_event setstring gg_leveldown name event_var(es_attackername)
+						es_event setstring gg_leveldown attackername event_var(es_attackername)
+						es_xevent fire gg_leveldown
+						
+						es_give event_var(attacker) player_weaponstrip
+						es_fire event_var(attacker) player_weaponstrip Strip 1
+						es_delayed 0.005 es_xgive event_var(attacker) item_assaultsuit
+						es_delayed 0.005 es_xgive event_var(attacker) weapon_knife
+						es_delayed 0.01 gg_equip event_var(attacker) event_var(es_attackerteam)
+					}
+				}
+			}
+		}
+		else do
+		{
+			// Player killed by world
+			ifx true(gg_suicide_punish) do
+			{
+				ifx true(gg_live_round) do
+				{
+					// Suicide code here
+					es_xformatqv gg_query "SELECT level FROM gg_players WHERE userid = '%1'" gg_userid
+					es_sql queryvalue gg_live gg_user_lvl server_var(gg_query)
+				
+					// Initialize event gg_leveldown
+					es_xmathparse gg_tmp "gg_user_lvl - gg_suicide_punish"
+					if (server_var(gg_tmp) <= 0) then es_xset gg_tmp 1
+					es_xevent initialize gg_leveldown
+					es_event setint gg_leveldown userid event_var(userid)
+					es_event setint gg_leveldown attacker event_var(attacker)
+					es_event setstring gg_leveldown steamid event_var(es_steamid)
+					es_event setint gg_leveldown old_level server_var(gg_user_lvl)
+					es_event setint gg_leveldown new_level server_var(gg_tmp)
+					es_event setint gg_leveldown team event_var(es_userteam)
+					es_event setstring gg_leveldown name event_var(es_username)
+					es_event setstring gg_leveldown attackername event_var(es_attackername)
+					es_xevent fire gg_leveldown
+				}
+			}
+		}
+	}
+}
+
+event gg_levelup
+{
+	// Check for a winner first
+	if (event_var(old_level) == server_var(gg_levels)) do
+	{
+		// Allow only one winner
+		if (server_var(gg_one_winner) == 0) do
+		{
+			if (event_var(victim) != 0) do
+			{
+				es_xset gg_one_winner 1
+				// Somebody won!
+				es_xevent initialize gg_win
+				es_event setint gg_win userid event_var(userid)
+				es_event setint gg_win loser event_var(victim)
+				es_event setstring gg_win steamid event_var(steamid)
+				es_event setint gg_win team event_var(team)
+				es_event setstring gg_win name event_var(name)
+				es_xevent fire gg_win
+			}
+		}
+	}
+	else do
+	{
+		// Retrieve the highest level from the database:
+		es_xsql queryvalue gg_live gg_leader_lvl "SELECT MAX(level) FROM gg_players"
+		es_xformatqv gg_query "SELECT COUNT(*) FROM gg_players WHERE level = '%1'" gg_leader_lvl
+	    es_sql queryvalue gg_live gg_leader_count server_var(gg_query)
+	    
+		// Regular levelup code
+		es_set gg_userid event_var(userid)
+		es_set gg_tmp event_var(new_level)
+		es_xformatqv gg_query "UPDATE gg_players SET kills = '0', level = '%1', levelup = levelup + 1 WHERE userid = '%2'" gg_tmp gg_userid
+		es_sql query gg_live server_var(gg_query)
+
+		if (event_var(new_level) = server_var(gg_leader_lvl)) do
+		{
+			if (server_var(gg_leader_count) > 1) do
+			{
+				if (server_var(gg_leader_count) = 2) do
+				{
+					es_format gg_format "[#lightgreen2-way tie#default]#green %1 #defaulthas tied the other leader on level #lightgreen%2" event_var(name) event_var(new_level)
+					es_msg #multi server_var(gg_format)
+				}
+				else do
+				{
+					es_format gg_format "[#lightgreen%1-way tie#default]#green %2 #defaulthas tied the other leaders on level #lightgreen%3" server_var(gg_leader_count) event_var(name) event_var(new_level)
+					es_msg #multi server_var(gg_format)
+				}
+			}
+			else do
+			{
+				es_format gg_format "#green%1#default is now leading on level #lightgreen%2" event_var(name) event_var(new_level)
+				es_msg #multi server_var(gg_format)
+			}
+		}
+	}
+}
+
+event gg_leveldown
+{
+	// Regular leveldown code
+	es_set gg_userid event_var(userid)
+	es_set gg_tmp event_var(new_level)
+	es_xformatqv gg_query "UPDATE gg_players SET kills = '0', level = '%1' WHERE userid = '%2'" gg_tmp gg_userid
+	es_sql query gg_live server_var(gg_query)
+}
+
+event gg_win
+{
+	// Update stats
+	es uniqueid gg_steamid event_var(userid) 1
+	if (event_var(steamid) != "BOT") do
+	{
+		es_xformatqv gg_query "UPDATE gg_players SET wins = wins + 1 WHERE steamid = '%1'" gg_steamid
+		es_sql queryvalue gg_database gg_wins server_var(gg_query)
+	}
+	
+	ifx true(eventscripts_nextmapoverride) do
+	{
+		foreach player gg_tmp #all "es_toptext server_var(gg_tmp) 5 #yellow event_var(name) won! Nextmap: server_var(eventscripts_nextmapoverride)"
+		es_msg #multi #green event_var(name) #lightgreen won! #default Nextmap: server_var(eventscripts_nextmapoverride)
+		es_msg #multi #green event_var(name) #lightgreen won! #default Nextmap: server_var(eventscripts_nextmapoverride)
+	}
+	else do
+	{
+		es_xset gg_exists 0
+		es_xexists gg_exists variable mani_nextmap
+		if (server_var(gg_exists) == 1) do
+		{
+			foreach player gg_tmp #all "es_toptext server_var(gg_tmp) 5 #yellow event_var(name) won! Nextmap: server_var(mani_nextmap)"
+			es_msg #multi #green event_var(name) #lightgreen won! #default Nextmap: server_var(mani_nextmap)
+			es_msg #multi #green event_var(name) #lightgreen won! #default Nextmap: server_var(mani_nextmap)
+		}
+		else do
+		{
+			foreach player gg_tmp #all "es_toptext server_var(gg_tmp) 5 #yellow event_var(name) won!"
+			es_msg #multi #green event_var(name) #lightgreen won!
+			es_msg #multi #green event_var(name) #lightgreen won!
+		}
+	}
+	
+	// End the map
+	es_xset gg_live_round 0
+	// Reset leader menu
+	gg_popup delete gg_leader_menu
+	es_xdoblock gungame4/create_leader_menu
+	
+	//Fire game_end
+	es_delayed .15 es_xgive event_var(userid) game_end
+	es_delayed .17 es_xfire event_var(userid) game_end EndGame
+	
+	// Play sound
+	es_cexec_all playgamesound server_var(gg_sound_winner)
+	sv_alltalk 1
+		
+	// If GG is loaded via map.cfg file, unload now
+	if (server_var(gg_loaded) == 2) do
+	{
+		es_xdelayed 3 es_xunload gungame4
+	}
+	
+	// Winner Display
+	ifx true(gg_winner_display) do
+	{
+		if (server_var(gg_winner_display) == 2) do
+		{
+			es_xcreateplayerlist gg_tmp_playerlist
+			es_xforeachkey gg_userid in gg_tmp_playerlist "es_xdoblock gungame4/winner_database"
+			es_xkeygroupdelete gg_tmp_playerlist
+			es_xsql query gg_live gg4wins "SELECT userid,name,level,kills,deaths,wins FROM gg_players ORDER BY level DESC, name"
+			es_xforeachkey gg_tmp_key in gg4wins "es_xdoblock gungame4/winner_database_rank"
+		
+			// Get zero key info
+			es_xkeycreate gg4wins "0"
+			es_keysetvalue gg4wins "0" winner event_var(name)
+			es uniqueid gg_steamid event_var(userid) 1
+			es_xformatqv gg_query "SELECT wins FROM gg_players WHERE steamid = '%1'" gg_steamid
+			es_sql queryvalue gg_database gg_wins server_var(gg_query)
+			es_keysetvalue gg4wins "0" winnerwins server_var(gg_wins)
+			es_set gg_userid event_var(userid)
+			es_xformatqv gg_query "SELECT COUNT(*) FROM gg_players WHERE wins > '%1'" gg_wins
+			es_sql queryvalue gg_database gg_tmp server_var(gg_query)
+			es_xmath gg_tmp + 1
+			es_keysetvalue gg4wins "0" winnerrank server_var(gg_tmp)
+			es_getplayername gg_tmp event_var(loser)
+			es_keysetvalue gg4wins "0" loser server_var(gg_tmp)
+			es_xsql queryvalue gg_database gg_tmp "SELECT COUNT(*) FROM gg_players"
+			es_keysetvalue gg4wins "0" totals server_var(gg_tmp)
+		
+			// Store database and send motd
+			es_xkeygroupsave gg4wins |gungame4/addons/web_data
+			es_xkeygroupdelete gg4wins
+			es_xrand gg_tmp 0 1000
+			es_xformatv gg_tmp_url "%1?%2" gg_winner_url gg_tmp
+			es_xdelayed 1 foreach player gg_userid #human "es usermsg motd server_var(gg_userid) 2 Winner server_var(gg_tmp_url)"
+		}
+		else do
+		{
+			es uniqueid gg_steamid event_var(userid) 1
+			es_xformatqv gg_query "SELECT wins FROM gg_players WHERE steamid = '%1'" gg_steamid
+			es_sql queryvalue gg_database gg_wins server_var(gg_query)
+			es_set gg_userid event_var(userid)
+			es_xformatqv gg_query "SELECT COUNT(*) FROM gg_players WHERE wins > '%1'" gg_wins
+			es_sql queryvalue gg_database gg_tmp3 server_var(gg_query)
+			es_xmath gg_tmp3 + 1
+			es_xsql queryvalue gg_database gg_tmp4 "SELECT COUNT(*) FROM gg_players"
+			es_set gg_username event_var(name)
+			es_xstring gg_username replace "%" "%25"
+			es_xstring gg_username replace "&" "%26"
+			es_xstring gg_username replace "'" "%27"
+			es_xstring gg_username replace "+" "%2B"
+			es_xstring gg_username replace "/" "%2F"
+			es_xstring gg_username replace "<" "%3C"
+			es_xstring gg_username replace ">" "%3E"
+			es_xstring gg_username replace "?" "%3F"
+			es_xstring gg_username replace "`" "%60"
+			es_xstring gg_username replace "|" "%7C"
+		
+			es_getplayername gg_tmp event_var(loser)
+			es_xstring gg_tmp replace "%" "%25"
+			es_xstring gg_tmp replace "&" "%26"
+			es_xstring gg_tmp replace "'" "%27"
+			es_xstring gg_tmp replace "+" "%2B"
+			es_xstring gg_tmp replace "/" "%2F"
+			es_xstring gg_tmp replace "<" "%3C"
+			es_xstring gg_tmp replace ">" "%3E"
+			es_xstring gg_tmp replace "?" "%3F"
+			es_xstring gg_tmp replace "`" "%60"
+			es_xstring gg_tmp replace "|" "%7C"
+			es_xformatv gg_tmp_url "%1?winner=%2&loser=%3&wins=%4&rank=%5&total=%6" gg_winner_url gg_username gg_tmp gg_wins gg_tmp3 gg_tmp4
+			es_xdelayed 1 foreach player gg_userid #human "es usermsg motd server_var(gg_userid) 2 Winner server_var(gg_tmp_url)"
+		}
+	}
+}
+
+
+block winner_database
+{
+	es_keygetvalue gg_kills gg_tmp_playerlist server_var(gg_userid) kills
+	es_keygetvalue gg_deaths gg_tmp_playerlist server_var(gg_userid) deaths
+	es uniqueid gg_steamid server_var(gg_userid) 1
+	es_xformatqv gg_query "SELECT wins FROM gg_players WHERE steamid = '%1'" gg_steamid
+	es_sql queryvalue gg_database gg_wins server_var(gg_query)
+	es_xformatqv gg_query "UPDATE gg_players SET kills = '%1',deaths = '%2',wins = '%3' WHERE userid = '%4'" gg_kills gg_deaths gg_wins gg_userid
+	es_sql query gg_live server_var(gg_query)
+}
+
+
+block winner_database_rank
+{
+    es_keygetvalue gg_userid gg4wins server_var(gg_tmp_key) userid
+    es gg_getwins gg_wins server_var(gg_userid)
+    es_xformatqv gg_query "SELECT COUNT(*) FROM gg_players WHERE wins > '%1'" gg_wins
+	es_sql queryvalue gg_database gg_tmp server_var(gg_query)
+	es_xmath gg_tmp + 1
+	es_keysetvalue gg4wins server_var(gg_tmp_key) rank server_var(gg_tmp)
+}
+
+
+event bomb_pickup
+{
+	ifx true(gg_map_obj) do
+	{
+		// Set bomber
+		es_set gg_bomber event_var(userid)
+	}
+}
+
+event bomb_dropped
+{
+	// Reset bomber
+	es_xset gg_bomber 0
+}
+
+event bomb_planted
+{
+	// Reset bomber
+	es_xset gg_bomber 0
+	es_fire event_var(userid) weapon_c4 Kill
+}
+
+event bomb_defused
+{
+	es_set gg_userid event_var(userid)
+	es_xformatqv gg_query "SELECT level FROM gg_players WHERE userid = '%1'" gg_userid
+	es_sql queryvalue gg_live gg_user_lvl server_var(gg_query)
+	es_xformatqv gg_query "SELECT weapon FROM gg_weapons WHERE level = '%1'" gg_user_lvl
+	es_sql queryvalue gg_live gg_user_wpn server_var(gg_query)
+	
+	if (server_var(gg_user_wpn) != "hegrenade") do
+	{
+		if (server_var(gg_user_wpn) != "knife") do
+		{
+			if (server_var(gg_user_lvl) != server_var(gg_levels)) do
+			{
+				// Levelup attacker
+				es_xmathparse gg_tmp "gg_user_lvl + 1"
+				es_xevent initialize gg_levelup
+				es_event setint gg_levelup userid event_var(userid)
+				es_xevent setint gg_levelup victim 0
+				es_event setstring gg_levelup steamid event_var(es_steamid)
+				es_event setint gg_levelup old_level server_var(gg_user_lvl)
+				es_event setint gg_levelup new_level server_var(gg_tmp)
+				es_event setint gg_levelup team event_var(es_userteam)
+				es_event setstring gg_levelup name event_var(es_username)
+				es_xevent setstring gg_levelup victimname 0
+				es_xevent fire gg_levelup
+			}
+			else do
+			{
+				es_tell event_var(userid) #green You cannot skip level server_var(gg_user_lvl) by defusing!
+			}
+		}
+		else do
+		{
+			es_tell event_var(userid) #green You cannot skip level server_var(gg_user_lvl) by defusing!
+		}
+	}
+	else do
+	{
+		es_tell event_var(userid) #green You cannot skip level server_var(gg_user_lvl) by defusing!
+	}
+}
+
+event bomb_exploded
+{
+	es_set gg_userid event_var(userid)
+	es_xformatqv gg_query "SELECT level FROM gg_players WHERE userid = '%1'" gg_userid
+	es_sql queryvalue gg_live gg_user_lvl server_var(gg_query)
+	es_xformatqv gg_query "SELECT weapon FROM gg_weapons WHERE level = '%1'" gg_user_lvl
+	es_sql queryvalue gg_live gg_user_wpn server_var(gg_query)
+	
+	if (server_var(gg_user_wpn) != "hegrenade") do
+	{
+		if (server_var(gg_user_wpn) != "knife") do
+		{
+			if (server_var(gg_user_lvl) != server_var(gg_levels)) do
+			{
+				// Levelup attacker
+				es_xmathparse gg_tmp "gg_user_lvl + 1"
+				es_xevent initialize gg_levelup
+				es_event setint gg_levelup userid event_var(userid)
+				es_xevent setint gg_levelup victim 0
+				es_event setstring gg_levelup steamid event_var(es_steamid)
+				es_event setint gg_levelup old_level server_var(gg_user_lvl)
+				es_event setint gg_levelup new_level server_var(gg_tmp)
+				es_event setint gg_levelup team event_var(es_userteam)
+				es_event setstring gg_levelup name event_var(es_username)
+				es_xevent setstring gg_levelup victimname 0
+				es_xevent fire gg_levelup
+			}
+			else do
+			{
+				es_tell event_var(userid) #green You cannot skip level server_var(gg_user_lvl) by planting the bomb!
+			}
+		}
+		else do
+		{
+			es_tell event_var(userid) #green You cannot skip level server_var(gg_user_lvl) by planting the bomb!
+		}
+	}
+	else do
+	{
+		es_tell event_var(userid) #green You cannot skip level server_var(gg_user_lvl) by planting the bomb!
+	}
+}
+
+
+block unload
+{
+	// Remove crontab commands
+	crontab del prune_gg_db
+	
+	// Remove top menu
+	es_xunload gungame4/menus/top_menu
+	
+	// Unload Addons
+	es_xunload gungame4/addons/gg_popup_lite
+	
+	es_xset gg_exists 0
+	es_xexists gg_exists script gungame4/addons/gg_handicap
+	ifx true(gg_exists) do
+	{
+		es_xunload gungame4/addons/gg_handicap
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists script gungame4/addons/gg_voting
+	ifx true(gg_exists) do
+	{
+		es_xunload gungame4/addons/gg_voting
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists script gungame4/addons/gg_turbo_mode
+	ifx true(gg_exists) do
+	{
+		es_xunload gungame4/addons/gg_turbo_mode
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists script gungame4/addons/gg_knife_pro
+	ifx true(gg_exists) do
+	{
+		es_xunload gungame4/addons/gg_knife_pro
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists script gungame4/addons/gg_knife_elite
+	ifx true(gg_exists) do
+	{
+		es_xunload gungame4/addons/gg_knife_elite
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists script gungame4/addons/gg_triple_level
+	ifx true(gg_exists) do
+	{
+		es_xunload gungame4/addons/gg_triple_level
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists script gungame4/addons/gg_deathmatch
+	ifx true(gg_exists) do
+	{
+		es_xunload gungame4/addons/gg_deathmatch
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists script gungame4/addons/gg_converter
+	ifx true(gg_exists) do
+	{
+		es_xunload gungame4/addons/gg_converter
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists script gungame4/addons/gg_unl_grenade
+	ifx true(gg_exists) do
+	{
+		es_xunload gungame4/addons/gg_unl_grenade
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists script gungame4/addons/gg_earn_nade
+	ifx true(gg_exists) do
+	{
+		es_xunload gungame4/addons/gg_earn_nade
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists script gungame4/addons/gg_sounds
+	ifx true(gg_exists) do
+	{
+		es_xunload gungame4/addons/gg_sounds
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists script gungame4/menus/welcome_menu
+	ifx true(gg_exists) do
+	{
+		es_xunload gungame4/menus/welcome_menu
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists script gungame4/addons/gg_noblock
+	ifx true(gg_exists) do
+	{
+		es_xunload gungame4/addons/gg_noblock
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists script gungame4/addons/gg_friendlyfire
+	ifx true(gg_exists) do
+	{
+		es_xunload gungame4/addons/gg_friendlyfire
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists script gungame4/addons/gg_nade_bonus
+	ifx true(gg_exists) do
+	{
+		es_xunload gungame4/addons/gg_nade_bonus
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists script gungame4/addons/gg_stats
+	ifx true(gg_exists) do
+	{
+		es_xunload gungame4/addons/gg_stats
+	}
+	es_xset gg_exists 0
+	es_xexists gg_exists script gungame4/addons/custom
+	ifx true(gg_exists) do
+	{
+		es_xunload gungame4/addons/custom
+	}
+	
+	// Unload GunGame
+	es_xsql close gg_live
+	es_xsql close gg_database
+	
+	//SETUP PLAYER SAY/CLIENT COMMANDS
+	es_xunregsaycmd !level
+	es_xunregclientcmd !level
+	es_xunregsaycmd !leader
+	es_xunregclientcmd !leader
+	es_xunregsaycmd !leaders
+	es_xunregclientcmd !leaders
+	es_xunregsaycmd !weapons
+	es_xunregclientcmd !weapons
+	es_xunregsaycmd !rules
+	es_xunregclientcmd !rules
+	es_xunregsaycmd !score
+	es_xunregclientcmd !score
+	es_xunregsaycmd !rank
+	es_xunregclientcmd !rank
+	es_xunregsaycmd !top
+	
+}
+
+block format_leaders
+{
+	es_keygetvalue gg_leader_name_tmp gg_leaders_keygroup server_var(gg_tempkey) name
+	if ("\" in server_var(gg_leader_name_tmp)) do
+	{
+		es_xstring gg_leader_name_tmp replace "\n"
+		es_xstring gg_leader_name_tmp replace "\r"
+	}
+	es_xformatv gg_leader_names "%1\n   %2" gg_leader_names gg_leader_name_tmp
+}
+
+block gg_display_level
+{
+	es_xgetcmduserid gg_userid
+	// Gather info from both databases
+	es_xformatqv gg_query "SELECT kills FROM gg_players WHERE userid = '%1'" gg_userid
+	es_sql queryvalue gg_live gg_p_kills server_var(gg_query)
+	es gg_getlevel gg_p_lvl server_var(gg_userid)
+	es_set gg_p_lvlsbehind server_var(gg_leader_lvl)
+	es_math gg_p_lvlsbehind - server_var(gg_p_lvl)
+	//es_xkeygroupdelete gg_!level_keygroup
+	es gg_getweapon gg_p_wpn server_var(gg_userid)
+	//es uniqueid gg_steamid server_var(gg_userid) 1
+	es gg_getwins gg_p_wins server_var(gg_userid)
+	if (server_var(gg_leader_lvl) > 1) do
+	{
+	    // Retrieve the highest level from the database:
+	    es_xsql queryvalue gg_live gg_leader_lvl "SELECT MAX(level) FROM gg_players"
+	    es_xformatqv gg_query "SELECT COUNT(*) FROM gg_players WHERE level = '%1'" gg_leader_lvl
+	    es_sql queryvalue gg_live gg_leader_count server_var(gg_query)
+	    if (server_var(gg_leader_lvl) != 1) do
+	    {
+    		// Find out the leader's name/s:
+		    es_xformatqv gg_query "SELECT name FROM gg_players WHERE level = '%1'" gg_leader_lvl
+		    es_sql query gg_live gg_leaders_keygroup server_var(gg_query)
+		    es_xset gg_leader_names "!@#$"
+		    es_xforeachkey gg_tempkey in gg_leaders_keygroup "es_xdoblock gungame4/format_leaders"
+		    es_xkeygroupdelete gg_leaders_keygroup
+		    es_set gg_leader_count server_var(gg_tempkey)
+		    if (server_var(gg_leader_names) != "!@#$") do
+		    {
+    			es_xstring gg_leader_names replace "!@#$"	
+		    }
+		    else do
+		    {
+    			es_xset gg_leader_names "   * There currently is no leader"
+		    }
+		    // Create leader menu:
+		    gg_popup exists gg_leader_menu
+		    ifx true(gg_exists) do
+		    {
+    			gg_popup delete gg_leader_menu
+		    }
+		    gg_popup create gg_leader_menu
+		    gg_popup addline gg_leader_menu "->1. Current Leaders:"
+		    es_xformatqv gg_query "SELECT weapon FROM gg_weapons WHERE level = '%1'" gg_leader_lvl
+		    es_sql queryvalue gg_live gg_leader_wpn server_var(gg_query)
+		    es_xformatv gg_leader_text "Level %1 (%2)" gg_leader_lvl gg_leader_wpn
+		    es gg_popup addline gg_leader_menu server_var(gg_leader_text)
+		    gg_popup addline gg_leader_menu "--------------------------"
+		    es gg_popup addline gg_leader_menu server_var(gg_leader_names)
+		    gg_popup addline gg_leader_menu "--------------------------"
+		    gg_popup addline gg_leader_menu "0. Exit"
+		}
+		if (server_var(gg_p_lvlsbehind) = 0) do
+		{
+			if (event_var(es_username) in server_var(gg_leader_names)) do
+			{
+				if (server_var(gg_leader_count) = 1) do
+				{
+					es_xformat gg_tmp_leadermsg "   * You are currently the leader"
+				}
+				else do
+				{
+					es_xformat gg_tmp_leadermsg "   * You are currently tied for the leader position"
+				}
+			}
+			else do
+			{
+				if (server_var(gg_leader_names) != "   * There currently is no leader") do
+				{
+					es_xformat gg_tmp_leadermsg "   * You are currently tied with the leader"
+				}
+				else do
+				{
+					es_xformat gg_tmp_leadermsg "   * There currently is no leader"
+				}
+			}
+		}
+		else do
+		{
+			if (server_var(gg_p_lvlsbehind) = 1) do
+			{
+				es_xformat gg_tmp_leadermsg "   * You are 1 level behind the leader"
+			}
+			else do
+			{
+				es_xformatv gg_tmp_leadermsg "   * You are %1 levels behind the leader" gg_p_lvlsbehind
+			}
+		}
+	}
+	else do
+	{
+		es_xformat gg_tmp_leadermsg "   * There currently is no leader"
+	}
+	
+	if (server_var(gg_multikill) > 1) do
+	{
+		if (server_var(gg_p_wpn) != "hegrenade") do
+		{
+			if (server_var(gg_p_wpn) != "knife") do
+			{
+				if (server_var(gg_leader_lvl) > 1) do
+				{
+					es_xformatv gg_level_menumsg "->1. LEVEL\nYou are on level %1 (%2)\nYou have made %3/%4 of your required kills\n%5\n->2. WINS\nYou have won %6 times\n->3. LEADER(s)\nLeader Level: %7\nCurrent leader(s):\n->   9. View Leaders Menu" gg_p_lvl gg_p_wpn gg_p_kills gg_multikill gg_tmp_leadermsg gg_p_wins gg_leader_lvl
+				}
+				else do
+				{
+					es_xformatv gg_level_menumsg "->1. LEVEL\nYou are on level %1 (%2)\nYou have made %3/%4 of your required kills\n%5\n->2. WINS\nYou have won %6 times\n->3. LEADER(s)\nLeader Level: There are no leaders\nCurrent leader(s):\n->   9. View Leaders Menu" gg_p_lvl gg_p_wpn gg_p_kills gg_multikill gg_tmp_leadermsg gg_p_wins
+				}
+			}
+			else do
+			{
+				if (server_var(gg_leader_lvl) > 1) do
+				{
+					es_xformatv gg_level_menumsg "->1. LEVEL\n   * You are on level %1\n   * You need a %2 kill to advance\n%3\n->2. WINS\n   * You have won %4 times\n->3. LEADER(s)\n   * Leader Level: %5\n->   9. View Leaders Menu" gg_p_lvl gg_p_wpn gg_tmp_leadermsg gg_p_wins gg_leader_lvl
+				}
+				else do
+				{
+					es_xformatv gg_level_menumsg "->1. LEVEL\n   * You are on level %1\n   * You need a %2 kill to advance\n%3\n->2. WINS\n   * You have won %4 times\n->3. LEADER(s)\n   * Leader Level: There are no leaders\n->   9. View Leaders Menu" gg_p_lvl gg_p_wpn gg_tmp_leadermsg gg_p_wins gg_leader_lvl
+				}
+			}
+		}
+		else do
+		{
+			if (server_var(gg_leader_lvl) > 1) do
+			{
+				es_xformatv gg_level_menumsg "->1. LEVEL\n   * You are on level %1\n   * You need a %2 kill to advance\n%3\n->2. WINS\n   * You have won %4 times\n->3. LEADER(s)\n   * Leader Level: %5\n->   9. View Leaders Menu" gg_p_lvl gg_p_wpn gg_tmp_leadermsg gg_p_wins gg_leader_lvl
+			}
+			else do
+			{
+				es_xformatv gg_level_menumsg "->1. LEVEL\n   * You are on level %1\n   * You need a %2 kill to advance\n%3\n->2. WINS\n   * You have won %4 times\n->3. LEADER(s)\n   * Leader Level: There are no leaders\n->   9. View Leaders Menu" gg_p_lvl gg_p_wpn gg_tmp_leadermsg gg_p_wins gg_leader_lvl
+			}
+		}
+	}
+	else do
+	{
+		if (server_var(gg_leader_lvl) > 1) do
+		{
+			es_xformatv gg_level_menumsg "->1. LEVEL\n   * You are on level %1\n   * You need a %2 kill to advance\n%3\n->2. WINS\n   * You have won %4 times\n->3. LEADER(s)\n   * Leader Level: %5\n->   9. View Leaders Menu" gg_p_lvl gg_p_wpn gg_tmp_leadermsg gg_p_wins gg_leader_lvl
+		}
+		else do
+		{
+			es_xformatv gg_level_menumsg "->1. LEVEL\n   * You are on level %1\n   * You need a %2 kill to advance\n%3\n->2. WINS\n   * You have won %4 times\n->3. LEADER(s)\n   * Leader Level: There are no leaders\n->   9. View Leaders Menu" gg_p_lvl gg_p_wpn gg_tmp_leadermsg gg_p_wins gg_leader_lvl
+		}
+	}
+	gg_popup exists gg_level_menu
+	ifx true(gg_exists) do
+	{
+		gg_popup delete gg_level_menu
+	}
+	es_xgetcmduserid gg_userid
+	gg_popup create gg_level_menu
+	gg_popup submenu gg_level_menu 9 gg_leader_menu
+	es gg_popup addline gg_level_menu server_var(gg_level_menumsg)
+	es gg_popup send gg_level_menu 5 server_var(gg_userid) 
+}
+
+
+block gg_display_leaders
+{
+    // Build menu first
+    // Retrieve the highest level from the database:
+	es_xsql queryvalue gg_live gg_leader_lvl "SELECT MAX(level) FROM gg_players"
+	if (server_var(gg_leader_lvl) != 1) do
+	{
+		// Find out the leader's name/s:
+		es_xformatqv gg_query "SELECT name FROM gg_players WHERE level = '%1'" gg_leader_lvl
+		es_sql query gg_live gg_leaders_keygroup server_var(gg_query)
+		es_xset gg_leader_names "!@#$"
+		es_xforeachkey gg_tempkey in gg_leaders_keygroup "es_xdoblock gungame4/format_leaders"
+		es_xkeygroupdelete gg_leaders_keygroup
+		es_set gg_leader_count server_var(gg_tempkey)
+		if (server_var(gg_leader_names) != "!@#$") do
+		{
+			es_xstring gg_leader_names replace "!@#$"	
+		}
+		else do
+		{
+			es_xset gg_leader_names "   * There currently is no leader"
+		}
+		// Create leader menu:
+		gg_popup exists gg_leader_menu
+		ifx true(gg_exists) do
+		{
+			gg_popup delete gg_leader_menu
+		}
+		gg_popup create gg_leader_menu
+		gg_popup addline gg_leader_menu "->1. Current Leaders:"
+		es_xformatqv gg_query "SELECT weapon FROM gg_weapons WHERE level = '%1'" gg_leader_lvl
+		es_sql queryvalue gg_live gg_leader_wpn server_var(gg_query)
+		es_xformatv gg_leader_text "Level %1 (%2)" gg_leader_lvl gg_leader_wpn
+		es gg_popup addline gg_leader_menu server_var(gg_leader_text)
+		gg_popup addline gg_leader_menu "--------------------------"
+		es gg_popup addline gg_leader_menu server_var(gg_leader_names)
+		gg_popup addline gg_leader_menu "--------------------------"
+		gg_popup addline gg_leader_menu "0. Exit"
+	}
+    
+    // Send menu
+	es_xgetcmduserid gg_userid
+	es gg_popup send gg_leader_menu 0 server_var(gg_userid)
+}
+
+block gg_display_weapons
+{
+	es_xgetcmduserid gg_userid
+	es gg_popup send gg_weaponpage1 0 server_var(gg_userid)
+}
+
+block gg_display_rules
+{
+	es_xgetcmduserid gg_userid
+	es gg_popup send gg_rules1 0 server_var(gg_userid)
+}
+
+block gg_display_scores
+{
+	// Get userid and check for spam
+	es_xgetcmduserid gg_userid
+	es_getplayername gg_username server_var(gg_userid)
+	es_xformatqv gg_query "SELECT give FROM gg_players WHERE userid = '%1'" gg_userid
+	es_sql queryvalue gg_live gg_tmp server_var(gg_query)
+	ifx false(gg_tmp) do
+	{
+		// Set spam check var
+		es_xformatqv gg_query "UPDATE gg_players SET give = '1' WHERE userid = '%1'" gg_userid
+		es_sql query gg_live server_var(gg_query)
+		
+		// Get level and continue
+		es gg_getlevel gg_user_lvl server_var(gg_userid)
+		
+		// Begin building the menu
+		es_xset gg_menuline_format "->1. Nearest players above you:\n Level   Name\n----------\n"
+	
+		// Get the number of players above this player's level
+		es_xformatqv gg_query "SELECT userid,name,level FROM gg_players WHERE level > %1 ORDER BY level ASC,name LIMIT 3" gg_user_lvl
+		es_sql query gg_live gg_tmp_keygroup server_var(gg_query)
+		es_xset gg_tmp_counter 1
+		while "server_var(gg_tmp_counter) < 4" "es_xdoblock gungame4/gg_score_loop"
+		es_xkeygroupdelete gg_tmp_keygroup
+		
+		// Count players that are tied
+		es_xformatqv gg_query "SELECT COUNT(*) FROM gg_players WHERE level = '%1'" gg_user_lvl
+		es_sql queryvalue gg_live gg_tmp server_var(gg_query)
+		es_xmath gg_tmp - 1
+		if (server_var(gg_tmp) == 1) do
+		{
+			// Tied with 1 other player
+			es_xformatv gg_menuline_format "%1 \n->2. You are on level %2\n  * Tied with one other player\n \n" gg_menuline_format gg_user_lvl
+		}
+		else do
+		{
+			if (server_var(gg_tmp) > 1) do
+			{
+				// Tied with 2 or more players
+				es_xformatv gg_menuline_format "%1 \n->2. You are on level %2\n  * Tied with %3 other players\n \n" gg_menuline_format gg_user_lvl gg_tmp
+			}
+			else do
+			{
+				// Not tied
+				es_xformatv gg_menuline_format "%1 \n->2. You are on level %2\n \n" gg_menuline_format gg_user_lvl
+			}
+		}
+		
+		// Get the number of players above this player's level
+		es_xformatv gg_menuline_format "%1->3. Nearest players below you:\n Level   Name\n----------\n" gg_menuline_format
+		es_xformatqv gg_query "SELECT userid,name,level FROM gg_players WHERE level < %1 ORDER BY level DESC,name LIMIT 3" gg_user_lvl
+		es_sql query gg_live gg_tmp_keygroup server_var(gg_query)
+		es_xset gg_tmp_counter 1
+		while "server_var(gg_tmp_counter) < 4" "es_xdoblock gungame4/gg_score_loop"
+		
+		// Complete menu and send
+		es_xformatv gg_menuline_format "%1 \n->0. Exit" gg_menuline_format
+		es_menu 10 server_var(gg_userid) server_var(gg_menuline_format)
+		es_xkeygroupdelete gg_tmp_keygroup
+		
+		// Delay to reset the spam var
+		es_delayed 3 gg_reset_cmd server_var(gg_userid)
+	}
+}
+
+block gg_score_loop
+{
+	es_xset gg_exists 0
+	es_exists gg_exists key gg_tmp_keygroup server_var(gg_tmp_counter)
+	ifx true(gg_exists) do
+	{
+		es_keygetvalue gg_tmp gg_tmp_keygroup server_var(gg_tmp_counter) level
+		es_keygetvalue gg_tmp2 gg_tmp_keygroup server_var(gg_tmp_counter) name
+		es_xstring gg_tmp2 replace "\" "-"
+		es_xformatv gg_menuline_format "%1   %2      %3\n" gg_menuline_format gg_tmp gg_tmp2
+	}
+	es_xmath gg_tmp_counter + 1
+}
+
+
+block gg_display_ranks
+{
+	// Get userid and check for spam
+	es_xgetcmduserid gg_userid
+	es_xformatqv gg_query "SELECT give FROM gg_players WHERE userid = '%1'" gg_userid
+	es_sql queryvalue gg_live gg_tmp server_var(gg_query)
+	ifx false(gg_tmp) do
+	{
+		// Set spam check var
+		es_xformatqv gg_query "UPDATE gg_players SET give = '1' WHERE userid = '%1'" gg_userid
+		es_sql query gg_live server_var(gg_query)
+		
+		// Get rank and continue
+		es_getplayersteamid gg_steamid server_var(gg_userid)
+		es_xformatqv gg_query "SELECT wins FROM gg_players WHERE steamid = '%1'" gg_steamid
+		es_sql queryvalue gg_database gg_wins server_var(gg_query)
+		es_sql queryvalue gg_database gg_total "SELECT COUNT(*) FROM gg_players"
+		ifx true(gg_wins) do
+		{
+			es_xformatqv gg_query "SELECT COUNT(*) FROM gg_players WHERE wins > '%1'" gg_wins
+			es_sql queryvalue gg_database gg_rank server_var(gg_query)
+			es_xmath gg_rank + 1
+		}
+		else do
+		{
+			es_xcopy gg_rank gg_total
+		}
+		
+		// Begin building the menu
+		es_xset gg_menuline_format "->1. Nearest players above you:\n Rank   Name\n----------\n"
+	
+		// Get the number of players above this player's level
+		es_xformatqv gg_query "SELECT name,wins FROM gg_players WHERE wins > %1 ORDER BY wins ASC,name LIMIT 3" gg_wins
+		es_sql query gg_database gg_tmp_keygroup server_var(gg_query)
+		keygroupsort gg_tmp_keygroup wins des #numeric
+		es_xforeachkey gg_tmp_key in gg_tmp_keygroup "es_xdoblock gungame4/gg_rank_loop"
+		//es_xset gg_tmp_counter 1
+		//while "server_var(gg_tmp_counter) < 4" "es_xdoblock gungame4/gg_rank_loop"
+		es_xkeygroupdelete gg_tmp_keygroup
+		
+		// Count players that are tied
+		es_xformatqv gg_query "SELECT COUNT(*) FROM gg_players WHERE wins = '%1'" gg_wins
+		es_sql queryvalue gg_database gg_tmp server_var(gg_query)
+		es_xmath gg_tmp - 1
+		if (server_var(gg_tmp) == 1) do
+		{
+			// Tied with 1 other player
+			es_xformatv gg_menuline_format "%1 \n->2. You are ranked %2 / %3\n  * Tied with one other player\n \n" gg_menuline_format gg_rank gg_total
+		}
+		else do
+		{
+			if (server_var(gg_tmp) > 1) do
+			{
+				// Tied with 2 or more players
+				es_xformatv gg_menuline_format "%1 \n->2. You are ranked %2 / %3\n  * Tied with %4 other players\n \n" gg_menuline_format gg_rank gg_total gg_tmp
+			}
+			else do
+			{
+				// Not tied
+				es_xformatv gg_menuline_format "%1 \n->2. You are ranked %2 / %3\n \n" gg_menuline_format gg_rank gg_total
+			}
+		}
+		
+		// Get the number of players above this player's level
+		es_xformatv gg_menuline_format "%1->3. Nearest players below you:\n Rank   Name\n----------\n" gg_menuline_format
+		es_xformatqv gg_query "SELECT name,wins FROM gg_players WHERE wins < %1 ORDER BY wins DESC,name LIMIT 3" gg_wins
+		es_sql query gg_database gg_tmp_keygroup server_var(gg_query)
+		es_xforeachkey gg_tmp_key in gg_tmp_keygroup "es_xdoblock gungame4/gg_rank_loop"
+		//es_xset gg_tmp_counter 1
+		//while "server_var(gg_tmp_counter) < 4" "es_xdoblock gungame4/gg_rank_loop"
+		
+		// Complete menu and send
+		es_xformatv gg_menuline_format "%1 \n->0. Exit" gg_menuline_format
+		es_menu 10 server_var(gg_userid) server_var(gg_menuline_format)
+		es_xkeygroupdelete gg_tmp_keygroup
+		
+		// Delay to reset the spam var
+		es_delayed 3 gg_reset_cmd server_var(gg_userid)
+	}
+}
+
+
+block gg_rank_loop
+{
+	es_keygetvalue gg_tmp gg_tmp_keygroup server_var(gg_tmp_key) wins
+	ifx true(gg_tmp) do
+	{
+		es_xformatqv gg_query "SELECT COUNT(*) FROM gg_players WHERE wins > '%1'" gg_tmp
+		es_sql queryvalue gg_database gg_tmp server_var(gg_query)
+		es_xmath gg_tmp + 1
+	}
+	else do
+	{
+		es_xcopy gg_tmp gg_total
+	}
+	es_keygetvalue gg_tmp2 gg_tmp_keygroup server_var(gg_tmp_key) name
+	es_xstring gg_tmp2 replace "\n"
+	es_xstring gg_tmp2 replace "\r"
+	es_xformatv gg_menuline_format "%1   %2      %3\n" gg_menuline_format gg_tmp gg_tmp2
+}
+
+
+block reset_cmd
+{
+	es_xgetargv gg_userid 1
+	es_xformatqv gg_query "UPDATE gg_players SET give = 0 WHERE userid = '%1'" gg_userid
+	es_sql query gg_live server_var(gg_query)
+}
+
+
+block gg_display_top
+{
+	es_xgetcmduserid gg_userid
+	es_xformatqv gg_query "SELECT give FROM gg_players WHERE userid = '%1'" gg_userid
+	es_sql queryvalue gg_live gg_tmp server_var(gg_query)
+	ifx false(gg_tmp) do
+	{
+		es gg_popup send gg_toppage1 0 server_var(gg_userid)
+		
+		// Delay to reset the spam var
+		es_delayed 3 gg_reset_cmd server_var(gg_userid)
+	}
+}
+
+
+block gg_display_commands
+{
+	es_xgetcmduserid gg_userid
+	es gg_popup send gg_commands 0 server_var(gg_userid)
+}
+
+block create_leader_menu
+{
+	gg_popup create gg_leader_menu
+	gg_popup addline gg_leader_menu "->1. Current Leaders:\n--------------------------\n   There currently is no leader\n--------------------------\n0. Exit"
+}
+
+block gg_set_weapon_order
+{
+	es_xgetargs gg_tmp_weapon_order
+	ifx true(gg_tmp_weapon_order) do
+	{
+		if (server_var(gg_tmp_weapon_order) == "#default") do
+		{
+			es gg_setweapons server_var(gg_default_weapon_order)
+		}
+		else do
+		{
+			if (server_var(gg_tmp_weapon_order) == "#random") do
+			{
+				ifx false(gg_random_weapon_order) do
+				{
+					es_xset gg_random_weapon_order 1
+					// Create weapon list
+					es_xload gungame4/menus/weapon_menu
+					es_xsoon es_xset gg_random_weapon_order 0
+				}
+				else do
+				{
+					// Create weapon list
+					es_xload gungame4/menus/weapon_menu
+				}
+			}
+			else do
+			{
+				if (server_var(gg_tmp_weapon_order) == "#reverse") do
+				{
+					es_xcopy gg_level_counter gg_levels
+					es_token gg_typo_format server_var(gg_weapon_order) server_var(gg_level_counter) ,
+					es_xmath gg_level_counter - 1
+					while "server_var(gg_level_counter) > 0" "es_xdoblock gungame4/reverse_order"
+					es_xcopy gg_weapon_order gg_typo_format
+					// Create weapon list
+					es_xload gungame4/menus/weapon_menu
+				}
+				else do
+				{
+					es_xcopy gg_weapon_order gg_tmp_weapon_order
+					// Create weapon list
+					es_xload gungame4/menus/weapon_menu
+				}
+			}
+			
+			// Setup live database
+			es_xsql query gg_live "DROP TABLE IF EXISTS gg_players"
+			es_sql query gg_live server_var(gg_live_create)
+		
+			foreach player gg_userid #all "es_xdoblock gungame4/player_prep_setup"
+		
+			// Reset round status
+			es_xset gg_live_round 0
+			es_xset gg_warmup_started 0
+			es_xset gg_leader_lvl 1
+			es_xdoblock gungame4/gg_start
+	
+			es_log [GunGame] Weapon order reset to: server_var(gg_weapon_order)
+			es_xlog [GunGame] Restarting map...
+			es_xmsg #green [GunGame] Changing weapon order...
+			es_xcentermsg Changing weapon order...
+			es_xmsg #green Restart in 1 second...
+			mp_restartgame 1
+		}
+	}
+	else do
+	{
+		es_xlog [GunGame] gg_setweapons: not enough arguments - Syntax: gg_setweapons <weapon>,<weapon>,<etc>
+	}
+}
+
+block reverse_order
+{
+	es_token gg_tmp_weapon server_var(gg_weapon_order) server_var(gg_level_counter) ,
+	es_xformatv gg_typo_format "%1,%2" gg_typo_format gg_tmp_weapon
+	es_xmath gg_level_counter - 1
+}
+
+block gg_getlevel
+{
+	es_xgetargc gg_tmp
+	if (server_var(gg_tmp) == 3) do
+	{
+		es_xgetargv gg_tmp 1
+		es_xgetargv gg_userid 2
+		es_set server_var(gg_tmp) 0
+		es_xformatqv gg_query "SELECT level FROM gg_players WHERE userid = '%1'" gg_userid
+		es_sql queryvalue gg_live server_var(gg_tmp) server_var(gg_query)
+	}
+	else do
+	{
+		es_xlog [GunGame] gg_getlevel: Incorrect syntax, gg_getlevel <variable> <userid>
+	}
+}
+
+block gg_getwins
+{
+	es_xgetargc gg_tmp
+	if (server_var(gg_tmp) == 3) do
+	{
+		es_xgetargv gg_tmp 1
+		es_xgetargv gg_userid 2
+		es uniqueid gg_steamid server_var(gg_userid) 1
+		es_set server_var(gg_tmp) 0
+		es_xformatqv gg_query "SELECT wins FROM gg_players WHERE steamid = '%1'" gg_steamid
+		es_sql queryvalue gg_database server_var(gg_tmp) server_var(gg_query)
+	}
+	else do
+	{
+		es_xlog [GunGame] gg_getwins: Incorrect syntax, gg_getwins <variable> <userid>
+	}
+}
+
+block gg_levelup_cmd
+{
+	es_xgetargv gg_userid 1
+	es_xgetargv gg_victimid 2
+	es_xset gg_exists 0
+	es_exists gg_exists userid server_var(gg_userid)
+	ifx true(gg_exists) do
+	{
+		es_xformatqv gg_query "SELECT level FROM gg_players WHERE userid = '%1'" gg_userid
+		es_sql queryvalue gg_live gg_user_lvl server_var(gg_query)
+		
+		es_getplayersteamid gg_steamid server_var(gg_userid)
+		es_getplayerteam gg_team server_var(gg_userid)
+		es_getplayername gg_username server_var(gg_userid)
+		
+		es_xset gg_exists 0
+		es_exists gg_exists userid server_var(gg_victimid)
+		ifx true(gg_exists) do
+		{
+			// Levelup
+			es_getplayername gg_victimname server_var(gg_victimid)
+			es_xmathparse gg_tmp "gg_user_lvl + 1"
+			es_xevent initialize gg_levelup
+			es_event setint gg_levelup userid server_var(gg_userid)
+			es_event setstring gg_levelup steamid server_var(gg_steamid)
+			es_event setint gg_levelup old_level server_var(gg_user_lvl)
+			es_event setint gg_levelup new_level server_var(gg_tmp)
+			es_event setstring gg_levelup team server_var(gg_team)
+			es_event setstring gg_levelup name server_var(gg_username)
+			es_event setint gg_levelup victim server_var(gg_victimid)
+			es_event setstring gg_levelup victimname server_var(gg_victimname)
+			es_xevent fire gg_levelup
+		}
+		else do
+		{
+			// Levelup no victim data
+			es_xmathparse gg_tmp "gg_user_lvl + 1"
+			es_xevent initialize gg_levelup
+			es_event setint gg_levelup userid server_var(gg_userid)
+			es_event setstring gg_levelup steamid server_var(gg_steamid)
+			es_event setint gg_levelup old_level server_var(gg_user_lvl)
+			es_event setint gg_levelup new_level server_var(gg_tmp)
+			es_event setstring gg_levelup team server_var(gg_team)
+			es_event setstring gg_levelup name server_var(gg_username)
+			es_xevent setint gg_levelup victim 0
+			es_xevent setstring gg_levelup victimname 0
+			es_xevent fire gg_levelup
+		}
+	}
+}
+
+
+block gg_leveldown_cmd
+{
+	es_xgetargv gg_userid 1
+	es_xgetargv gg_attackerid 2
+	es_xset gg_exists 0
+	es_exists gg_exists userid server_var(gg_userid)
+	ifx true(gg_exists) do
+	{
+		es_xformatqv gg_query "SELECT level FROM gg_players WHERE userid = '%1'" gg_userid
+		es_sql queryvalue gg_live gg_user_lvl server_var(gg_query)
+		
+		if (server_var(gg_user_lvl) != 1) do
+		{
+			es_getplayersteamid gg_steamid server_var(gg_userid)
+			es_getplayerteam gg_team server_var(gg_userid)
+			es_getplayername gg_username server_var(gg_userid)
+			
+			es_xset gg_exists 0
+			es_exists gg_exists userid server_var(gg_attackerid)
+			ifx false(gg_exists) do
+			{
+				// Initialize event gg_leveldown with no attacker
+				es_xmathparse gg_tmp "gg_user_lvl - 1"
+				es_xevent initialize gg_leveldown
+				es_event setint gg_leveldown userid server_var(gg_userid)
+				es_xevent setint gg_leveldown attacker 0
+				es_event setstring gg_leveldown steamid server_var(gg_steamid)
+				es_event setint gg_leveldown old_level server_var(gg_user_lvl)
+				es_event setint gg_leveldown new_level server_var(gg_tmp)
+				es_event setint gg_leveldown team server_var(gg_team)
+				es_event setstring gg_leveldown name server_var(gg_username)
+				es_xevent setstring gg_leveldown attackername 0
+				es_xevent fire gg_leveldown
+			}
+			else do
+			{
+				// Initialize event gg_leveldown
+				es_xmathparse gg_tmp "gg_user_lvl - 1"
+				es_getplayername gg_attackername server_var(gg_attackerid)
+				es_xevent initialize gg_leveldown
+				es_event setint gg_leveldown userid server_var(gg_userid)
+				es_event setint gg_leveldown attacker server_var(gg_attackerid)
+				es_event setstring gg_leveldown steamid server_var(gg_steamid)
+				es_event setint gg_leveldown old_level server_var(gg_user_lvl)
+				es_event setint gg_leveldown new_level server_var(gg_tmp)
+				es_event setint gg_leveldown team server_var(gg_team)
+				es_event setstring gg_leveldown name server_var(gg_username)
+				es_event setstring gg_leveldown attackername server_var(gg_attackername)
+				es_xevent fire gg_leveldown
+			}
+		}
+		else do
+		{
+			es_log [GunGame] gg_leveldown: Could not leveldown userid server_var(gg_userid) is already on level 1.
+		}
+	}
+}
+
+
+block gg_win_cmd
+{
+	es_xgetargv gg_userid 1
+	es_xgetargv gg_victimid 2
+	es_xset gg_exists 0
+	es_exists gg_exists userid server_var(gg_userid)
+	ifx true(gg_exists) do
+	{
+		es_xset gg_one_winner 1
+		es_getplayersteamid gg_steamid server_var(gg_userid)
+		es_getplayerteam gg_team server_var(gg_userid)
+		es_getplayername gg_username server_var(gg_userid)
+		es_xset gg_exists 0
+		es_exists gg_exists userid server_var(gg_victimid)
+		ifx true(gg_exists) do
+		{
+			// Victim userid is valid
+			es_xevent initialize gg_win
+			es_event setint gg_win userid server_var(gg_userid)
+			es_event setint gg_win loser server_var(gg_victimid)
+			es_event setstring gg_win steamid server_var(gg_steamid)
+			es_event setint gg_win team server_var(gg_team)
+			es_event setstring gg_win name server_var(gg_username)
+			es_xevent fire gg_win
+		}
+		else do
+		{
+			// Victim userid is invalid
+			es_xevent initialize gg_win
+			es_event setint gg_win userid server_var(gg_userid)
+			es_xevent setint gg_win loser 0
+			es_event setstring gg_win steamid server_var(gg_steamid)
+			es_event setint gg_win team server_var(gg_team)
+			es_event setstring gg_win name server_var(gg_username)
+			es_xevent fire gg_win
+		}
+	}
+}
+
+
+block gg_getmaxlevel_cmd
+{
+	es_xgetargv gg_tmp 1
+	ifx true(gg_tmp) do
+	{
+		es_set server_var(gg_tmp) server_var(gg_levels)
+	}
+	else do
+	{
+		es_xlog [GunGame] - gg_getmaxlevel: Incorrect syntax- gg_getmaxlevel <var>
+	}
+}
+
+
+block gg_getleaderlevel_cmd
+{
+    es_xgetargv gg_tmp 1
+	ifx true(gg_tmp) do
+	{
+	    es_sql queryvalue gg_live server_var(gg_tmp) "SELECT MAX(level) FROM gg_players"
+	}
+	else do
+	{
+		es_xlog [GunGame] - gg_getleaderlevel: Incorrect syntax- gg_getleaderlevel <var>
+	}
+}
+
+
+block gg_getleaderweapon_cmd
+{
+	es_xgetargv gg_tmp 1
+	ifx true(gg_tmp) do
+	{
+		gg_getleaderlevel gg_tmp2
+		es_xformatqv gg_query "SELECT weapon FROM gg_weapons WHERE level = '%1'" gg_tmp2
+		es_sql queryvalue gg_live server_var(gg_tmp) server_var(gg_query)
+	}
+	else do
+	{
+		es_xlog [GunGame] - gg_getleaderweapon: Incorrect syntax- gg_getleaderweapon <var>
+	}
+}
+		
+
+block gg_getweapon
+{
+	es_xgetargc gg_tmp
+	if (server_var(gg_tmp) == 3) do
+	{
+		es_xgetargv gg_tmp 1
+		es_xgetargv gg_userid 2
+		es_set server_var(gg_tmp) 0
+		es_xformatqv gg_query "SELECT level FROM gg_players WHERE userid = '%1'" gg_userid
+		es_sql queryvalue gg_live gg_user_lvl server_var(gg_query)
+		es_xformatqv gg_query "SELECT weapon FROM gg_weapons WHERE level = '%1'" gg_user_lvl
+		es_sql queryvalue gg_live server_var(gg_tmp) server_var(gg_query)
+	}
+	else do
+	{
+		es_xlog [GunGame] gg_getweapon: Incorrect syntax, gg_getweapon <variable> <userid>
+	}
+}
+
+block gg_setlevel
+{
+	es_xgetargc gg_tmp
+	if (server_var(gg_tmp) == 3) do
+	{
+		es_xgetargv gg_tmp 2
+		es_xgetargv gg_userid 1
+		es_xset gg_exists 0
+		es_exists gg_exists userid server_var(gg_userid)
+		ifx true(gg_exists) do
+		{
+			ifx parse("gg_tmp >= 1 and gg_tmp <= gg_levels") do
+			{
+				es_xformatqv gg_query "SELECT level FROM gg_players WHERE userid = '%1'" gg_userid
+				es_xformatqv gg_query "UPDATE gg_players SET level = '%1' WHERE userid = '%2'" gg_tmp gg_userid
+				es_sql query gg_live server_var(gg_query)
+					
+				// Update leader
+				es_xsql queryvalue gg_live gg_leader_lvl "SELECT MAX(level) FROM gg_players"
+			}
+			else do
+			{
+				es_log [GunGame] gg_setlevel: Level must be between 1 and server_var(gg_levels)
+			}
+		}
+		else do
+		{
+			es_xlog [GunGame] gg_setlevel: Invalid userid, gg_setlevel <userid> <level number>
+		}
+	}
+	else do
+	{
+		es_xlog [GunGame] gg_setlevel: Incorrect syntax, gg_setlevel <userid> <level number>
+	}
+}

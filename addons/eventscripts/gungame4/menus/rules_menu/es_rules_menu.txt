@@ -1,0 +1,37 @@
+// GunGame Rules Menu
+// (c)2007 by GunGame Coding Team (cagemonkey,XE_Manup)
+
+block load
+{
+   gg_popup create gg_rules1
+   gg_popup addline gg_rules1 "GunGame Rules:   1/2"
+   gg_popup addline gg_rules1 "-----------------------------"
+   gg_popup addline gg_rules1 "->1. You must get a kill with your current weapon to level up."
+   gg_popup addline gg_rules1 "->2. If you get a kill with a weapon out of order, it does not count and you remain on your current level."
+   gg_popup addline gg_rules1 "->3. You can gain levels by PLANTING and DEFUSING."
+   gg_popup addline gg_rules1 "->4. If you commit suicide, you CAN lose a level."
+   gg_popup addline gg_rules1 "->5. Friendly Fire is turned ON when someone reaches GRENADE level."
+   //gg_popup addline gg_rules "->6. You CAN gain more than one level per round."
+   gg_popup addline gg_rules1 "-----------------------------"
+   gg_popup addline gg_rules1 "->9. More"
+   gg_popup addline gg_rules1 "0. Cancel"
+   gg_popup submenu gg_rules1 9 gg_rules2 
+   gg_popup setvalidkeys gg_rules1 "90"
+   gg_popup cache gg_rules1
+
+   gg_popup create gg_rules2
+   gg_popup addline gg_rules2 "GunGame Rules:   2/2"
+   gg_popup addline gg_rules2 "-----------------------------"
+   gg_popup addline gg_rules2 "->6. There is a grace period at the end of each round to allow players to switch teams."
+   gg_popup addline gg_rules2 "->7. If Knife Pro is ENABLED, you can steal a level from an opponent by knifing them."
+   gg_popup addline gg_rules2 "->8. If GG Turbo is ENABLED, you will receive your next weapon immediately when you level up."
+   gg_popup addline gg_rules2 "->9. If Knife Elite is ENABLED, after you levelup, you will only have a knife until the next round starts."
+   gg_popup addline gg_rules2 " "
+   gg_popup addline gg_rules2 "-----------------------------"
+   gg_popup addline gg_rules2 "->8. Back"
+   gg_popup addline gg_rules2 "0. Cancel"
+   gg_popup setvalidkeys gg_rules2 "80"
+   gg_popup submenu gg_rules2 8 gg_rules1
+   gg_popup cache gg_rules2
+   es_xsoon es_xunload gungame4/menus/rules_menu
+}

@@ -1,0 +1,229 @@
+// GunGame Map Voting Addon
+// (c)2007 by GunGame Coding Team (cagemonkey,XE_Manup)
+//
+// requires ES_Tools v0.417a+
+//
+
+block load
+{
+	// Check gg_vote_options
+	ifx false(gg_vote_options) do
+	{
+		es_xdbgmsg 0 Invalid map options set in cfg, unloading gg_voting addon
+		es_xunload gungame4/addons/gg_voting
+	}
+	else do
+	{
+		// Init vars
+		es_xset gg_file_id 0
+		es_xset gg_line_count 0
+		es_xset gg_line_num 0
+		es_xset gg_word 0
+		es_xset gg_vote_trigger 0
+		es_xset gg_vote_exclude 0
+		es_xset gg_vote_mapname 0
+		es_xset gg_voteleader_lvl 0
+		es_xset gg_vote_started 0
+	
+		gg_getmaxlevel gg_vote_trigger
+		es_xmath gg_vote_trigger - 2
+		
+		if (server_var(gg_voting) != 4) do
+		{
+			ifx true(mani_nextmap) do
+			{
+				es_xdbgmsg 0 Invalid gg_voting setup in config, unloading gg_voting addon
+				es_xunload gungame4/addons/gg_voting
+			}
+			else do
+			{
+				refcount increment eventscripts_maphandler
+				downloadable sound/admin_plugin/actions/startyourvoting.mp3
+				downloadable sound/admin_plugin/actions/endofvote.mp3
+				
+				// Create database
+				es_xsql query gg_live "CREATE TABLE IF NOT EXISTS vote(id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, mapname VARCHAR(50))"
+				
+				// Read files
+				if (server_var(gg_voting) == 1) do
+				{
+					// Read mapcycle.txt
+					est_openfile gg_file_id r mapcycle.txt
+				}
+				if (server_var(gg_voting) == 2) do
+				{
+					// Read maplist.txt
+					est_openfile gg_file_id r maplist.txt
+				}
+				if (server_var(gg_voting) == 3) do
+				{
+					// Read ggmaplist.txt
+					est_openfile gg_file_id r cfg/gungame/ggmaplist.txt
+				}
+				es est_countlines gg_line_count server_var(gg_file_id)
+				es_xset gg_line_num 0
+    			while "server_var(gg_line_num) < server_var(gg_line_count)" "es_xdoblock gungame4/addons/gg_voting/read_file"
+    			es est_closefile server_var(gg_file_id)
+	    		
+    			// Load dependencies
+				es_xset gg_exists 0
+				es_xexists gg_exists script popup
+				ifx false(gg_exists) do
+				{
+					es_xload popup
+				}
+				es_xset gg_exists 0
+				es_xexists gg_exists script keymenu
+				ifx false(gg_exists) do
+				{
+					es_xload keymenu
+				}
+				es_xset gg_exists 0
+				es_xexists gg_exists script vote
+				ifx false(gg_exists) do
+				{
+					es_xload vote
+				}
+			}
+    	}
+	}
+}
+
+event es_map_start
+{
+	if (server_var(gg_voting) != 4) do
+	{
+		es_sql query gg_live "DROP TABLE IF EXISTS vote"
+		es_xsql query gg_live "CREATE TABLE IF NOT EXISTS vote(id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, mapname VARCHAR(50))"
+		downloadable sound/admin_plugin/actions/startyourvoting.mp3
+		downloadable sound/admin_plugin/actions/endofvote.mp3
+		
+		// Reread maplist
+		if (server_var(gg_voting) == 1) do
+		{
+			// Read mapcycle.txt
+			est_openfile gg_file_id r mapcycle.txt
+		}
+		if (server_var(gg_voting) == 2) do
+		{
+			// Read maplist.txt
+			est_openfile gg_file_id r maplist.txt
+		}
+		if (server_var(gg_voting) == 3) do
+		{
+			// Read ggmaplist.txt
+			est_openfile gg_file_id r cfg/gungame/ggmaplist.txt
+		}
+		es est_countlines gg_line_count server_var(gg_file_id)
+		es_xset gg_line_num 0
+    	while "server_var(gg_line_num) < server_var(gg_line_count)" "es_xdoblock gungame4/addons/gg_voting/read_file"
+    	es est_closefile server_var(gg_file_id)
+    }
+	es_xset gg_vote_started 0
+}
+
+event player_say
+{
+	if (event_var(text) == "nextmap") do
+	{
+	    if (server_var(gg_voting) != 4) do
+	    {
+	        ifx false(eventscripts_nextmapoverride) do
+		    {
+    			foreach player gg_tmp #human "es_toptext server_var(gg_tmp) 5 Nextmap: Decided by vote"
+		    }
+		    else do
+		    {
+    			foreach player gg_tmp #human "es_toptext server_var(gg_tmp) 5 Nextmap: server_var(eventscripts_nextmapoverride)"
+    		}
+		}
+	}
+}
+	
+
+block read_file
+{
+	es_xmath gg_line_num + 1
+    es est_getline gg_word server_var(gg_file_id) server_var(gg_line_num)
+    es_strlen gg_tmp server_var(gg_word)
+    if (server_var(gg_tmp) > 1) do
+    {
+        es_xformatqv gg_query "INSERT INTO vote('mapname') VALUES ('%1')" gg_word
+        es_sql query gg_live server_var(gg_query)
+    }
+}
+
+event gg_levelup
+{
+	if (server_var(gg_leader_lvl) == server_var(gg_vote_trigger)) do
+	{
+		// Only continue if no other script has set the next map
+		ifx false(eventscripts_nextmapoverride) do
+		{
+			 ifx false(gg_vote_started) do
+	    	{
+			    // Trigger map vote
+				es_xset gg_vote_started 1
+				if (server_var(gg_voting) != 4) do
+				{
+					vote delete gg_mapvote
+					vote create gg_mapvote "gungame4/addons/gg_voting/vote_result" "gungame4/addons/gg_voting/vote_submit"
+					vote setquestion gg_mapvote "Choose the next map"
+					es_xformatqv gg_query "SELECT mapname FROM vote WHERE mapname != '%1' ORDER BY RANDOM() LIMIT %2" eventscripts_currentmap gg_vote_options
+					es_sql query gg_live gg_tmp_keygroup server_var(gg_query)
+					es_xforeachkey gg_tmp_key in gg_tmp_keygroup "es_xdoblock gungame4/addons/gg_voting/get_maps"
+					es_xsoon es_xkeygroupdelete gg_tmp_keygroup
+					vote start gg_mapvote 20
+					es_xcexec_all play admin_plugin/actions/startyourvoting.mp3
+				}
+				else do
+				{
+					es ma_voterandom end server_var(gg_vote_options)
+				}
+			}
+		}
+		else do
+		{
+			es_xdbgmsg 0 [GunGame] - Map vote failed because eventscripts_nextmapoverride was previously set by another script.
+		}
+	}
+}
+
+block get_maps
+{
+	es_keygetvalue gg_vote_mapname gg_tmp_keygroup server_var(gg_tmp_key) mapname
+	es vote addanswer gg_mapvote server_var(gg_vote_mapname)
+}
+
+block vote_submit
+{
+	// results:
+	// _vote_name     = Name of the vote
+	// _vote_id       = ID of the submitted answer
+	// _vote_text     = Text of the submitted answer
+	// _vote_userid   = UserID that submitted the answer
+	es_getplayername gg_username server_var(_vote_userid)
+	es_msg #multi #lightgreen server_var(gg_username) #default has voted server_var(_vote_text) #green[#lightgreen server_var(_vote_id) #green]!
+}
+
+block vote_result
+{
+	// results:
+	// _vote_name     = Name of the vote
+	// _vote_id       = ID of the winning answer
+	// _vote_text     = Text of the winning answer
+	// _vote_count    = Votes of the winning answer
+	// _vote_percent  = Percentage of the winning answer
+	// _vote_votes    = Total votes
+	// _vote_tie      = 1 if there would be two or more winning answers and 0 if there is only one winning answer
+	// _vote_canceled = 1 if the vote was canceled and 0 if it was normaly stopped
+	es_xcexec_all play admin_plugin/actions/endofvote.mp3
+	foreach player gg_tmp #all "es_toptext server_var(gg_tmp) 5 #yellow Nextmap: server_var(_vote_text)"
+	es_msg Nextmap: server_var(_vote_text)
+	es_set eventscripts_nextmapoverride server_var(_vote_text)
+}
+
+block unload
+{
+	refcount decrement eventscripts_maphandler
+}

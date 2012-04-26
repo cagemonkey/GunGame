@@ -1,0 +1,984 @@
+// keymenu v0.6.7 by XE_ManUp
+//   modified by [NATO]Hunter (setvar,getvar,backmenu,getmenuname,update)
+
+block load
+{
+  es_xkeygroupcreate _keymenu_created_menus
+  es_xsql open _keymenu_database ":memory:"
+  es_xformatqv _keymenu_query "CREATE TABLE IF NOT EXISTS _keymenu_list (keymenu varchar(100), display varchar(100), return varchar(100), page_name varchar(100));"
+  es_sql query _keymenu_database server_var(_keymenu_query)
+  es_xset _keymenu_exists 0
+  es_xexists _keymenu_exists script popup
+  ifx false(_keymenu_exists) do
+  {
+    es_xload popup
+  }
+  es_xexists _keymenu_exists command keymenu
+  ifx false(_keymenu_exists) do
+  {
+    es_xregcmd keymenu keymenu/keymenu_sort "Build a dynamic menu using a keygroup."
+  }
+  es_xset _keymenu_page 0
+  es_xset _keymenu_blanklines 0
+  es_xset _keymenu_tempkey 0
+  es_xset _keymenu_menuline_format 0
+  es_xset _keymenu_submenu_format 0
+  es_xset _keymenu_stored_return 0
+  es_xset _keymenu_stored_display 0
+  es_xset _keymenu_nextmenu_number 0
+  es_xset _keymenu_userid 0
+  es_xset _keymenu_selections 0
+  es_xset _keymenu_currentpage 0
+  es_xset _keymenu_pagecount 0
+  es_xset _keymenu_insertquery 0
+  es_xset _keymenu_addlinestring 0
+  
+  // keymenu sort vars
+  es_xset _keymenu_argc 0
+  es_xset _keymenu_argv 0
+  es_xset _keymenu_args 0
+  es_xset _keymenu_format 0
+  es_xset _keymenu_validargs "create,send,delete,getpages,exists,changeblock,setvar,getvar,backmenu,getmenuname,update"
+
+  // keymenu create vars
+  es_xset _keymenu_query 0
+  es_xset _keymenu_space " "
+  es_xset _keymenu_tokencheck 0
+  es_xset _keymenu_menuname 0
+  es_xset _keymenu_returnvar 0
+  es_xset _keymenu_scriptblock 0
+  es_xset _keymenu_keygroup 0
+  es_xset _keymenu_menudisplay 0
+  es_xset _keymenu_menureturn 0
+  es_xset _keymenu_titletext 0
+  es_xset _keymenu_titletext_desc 0
+  es_xset _keymenu_titletext_orig 0
+
+  // keymenu setvar/getvar/backmenu/getmenuname vars
+  es_xset _keymenu_backmenu 0
+  es_xset _keymenu_othermenu 0
+  es_xset _keymenu_intern_var 0
+  es_xset _keymenu_intern_value 0
+}
+
+block unload
+{
+  es_xsql query _keymenu_database _keymenu_delete "SELECT page_name FROM _keymenu_list WHERE page_name<>'NULL'"
+  es_xforeachkey _keymenu_tempkey in _keymenu_delete "es_xdoblock keymenu/delete_loop"
+  es_xsql query _keymenu_database "DROP TABLE IF EXISTS _keymenu_list"
+  es_xsql close _keymenu_database
+  es_xkeygroupdelete _keymenu_delete
+  es_xkeygroupdelete _keymenu_created_menus
+}
+
+block keymenu_sort
+{
+  es_xgetargc _keymenu_argc
+  es_xgetargs _keymenu_args
+  if (server_var(_keymenu_argc) > 1) do
+  {
+    es_xgetargv _keymenu_argv 1
+    if (server_var(_keymenu_argv) in server_var(_keymenu_validargs)) do
+    {
+      es_xformatv _keymenu_format "keymenu/%1" _keymenu_argv
+      es_doblock server_var(_keymenu_format)
+    }
+    else do
+    {
+      es_xformatv _keymenu_format "keymenu: '%1' is not a valid argument" _keymenu_argv
+      es_xdbgmsgv 0 _keymenu_format
+    }
+  }
+  else do
+  {
+    es_xdbgmsg 0 keymenu: keymenu <create | delete | send | exists | getpages>
+  }
+}
+
+// keymenu create <menu name> <return var> <script/block> <keygroup> <menu display> <menu return> Menu Title Text
+block create
+{
+  if (server_var(_keymenu_argc) >= 9) do
+  {
+    // Check to see if the keygroup exists before doing anything else:
+    es_xgetargv _keymenu_keygroup 5
+    es_exists _keymenu_exists keygroup server_var(_keymenu_keygroup)
+    ifx true(_keymenu_exists) do
+    {
+      // Check to see if # is in the commandstring before doing anything else:
+      es_token _keymenu_tokencheck server_var(_keymenu_args) 0 #
+      ifx true(_keymenu_tokencheck) do
+      {
+        // Check to see if there are at least 2 #'s in the commandstring:
+        if (server_var(_keymenu_tokencheck) = 3) do
+        {
+          // ############### START MENU DISPLAY ###############
+          // Retrieve the "Menu Display" key/keyvalue:
+          es_token _keymenu_menudisplay server_var(_keymenu_args) 2 #
+          if ("key" in server_var(_keymenu_menudisplay)) do
+          {
+            if ("keyvalue" in server_var(_keymenu_menudisplay)) do
+            {
+              // Remove "keyvalue " from the _keymenu_menudisplay string:
+              es_xstring _keymenu_menudisplay replace "keyvalue "
+              es_xstring _keymenu_menudisplay replacev _keymenu_space
+            }
+            else do
+            {
+              es_xstring _keymenu_menudisplay replacev _keymenu_space
+            }
+            // ############### END MENU DISPLAY ###############
+          }
+          else do
+          {
+            // If # exists, but is not followed by "key" or "keyvalue", give error message and halt keymenu creation
+            es_xdbgmsg 0 keymenu: There must be 2 #key and/or #keyvalue in the commandstring.
+            es_xdbgmsg 0 keymenu: Your commandstring was:
+            es_xformatv _keymenu_format "           keymenu %1" _keymenu_args
+            es_xdbgmsgv 0 _keymenu_format
+          }
+          // ############### START MENU RETURN ###############
+          // Retrieve the "Menu Return" key/keyvalue:
+          es_token _keymenu_menureturn server_var(_keymenu_args) 3 #
+          if ("key" in server_var(_keymenu_menureturn)) do
+          {
+            if ("keyvalue" in server_var(_keymenu_menureturn)) do
+            {
+              // Remove "keyvalue " from the _keymenu_menudisplay string:
+              es_xstring _keymenu_menureturn replace "keyvalue "
+              // Retrieve the "Title Text":
+              es_xcopy _keymenu_titletext _keymenu_menureturn
+              // Retrieve the keyvalue from _keymenu_menureturn:
+              es_token _keymenu_menureturn server_var(_keymenu_menureturn) 1
+              // Strip the "keyvalue" from the "Title Text":
+              es_xformatv _keymenu_format "%1 " _keymenu_menureturn
+              es_xstring _keymenu_titletext replacev _keymenu_format
+            }
+            else do
+            {
+              // Retrieve the "Title Text":
+              es_xcopy _keymenu_titletext _keymenu_menureturn
+              // Retrieve the key from _keymenu_menureturn:
+              es_token _keymenu_menureturn server_var(_keymenu_menureturn) 1
+              // Strip the "key " from the "Title Text":
+              es_xformatv _keymenu_format "%1 " _keymenu_menureturn
+              es_xstring _keymenu_titletext replacev _keymenu_format
+            }
+            // ############### END MENU RETURN ###############
+
+            // ############### START RETURN VAR SETUP ###############
+            // Check to see if the "return var" exists. If not, create it and set to "0".
+            es_xgetargv _keymenu_returnvar 3
+            es_exists _keymenu_exists variable server_var(_keymenu_returnvar)
+            ifx false(_keymenu_exists) do
+            {
+              es_set server_var(_keymenu_returnvar) 0
+            }
+            // ############### END RETURN VAR SETUP ###############
+
+            // ############### START KEYMENU/POPUP SETUP ###############
+            // Check to see if the "keymenu/popup" exists. If not, allow it to be created.
+            es_xgetargv _keymenu_menuname 2
+            es_exists _keymenu_exists key _keymenu_created_menus server_var(_keymenu_menuname)
+            ifx false(_keymenu_exists) do
+            {
+              es_xgetargv _keymenu_scriptblock 4
+              es_keycreate _keymenu_created_menus server_var(_keymenu_menuname)
+              es_keysetvalue _keymenu_created_menus server_var(_keymenu_menuname) _backmenu 0
+              es_keysetvalue _keymenu_created_menus server_var(_keymenu_menuname) _keygroup server_var(_keymenu_keygroup)
+              es_keysetvalue _keymenu_created_menus server_var(_keymenu_menuname) _scriptblock server_var(_keymenu_scriptblock)
+              es_keysetvalue _keymenu_created_menus server_var(_keymenu_menuname) _returnvar server_var(_keymenu_returnvar)
+              es_keysetvalue _keymenu_created_menus server_var(_keymenu_menuname) _titletext server_var(_keymenu_titletext)
+              es_keysetvalue _keymenu_created_menus server_var(_keymenu_menuname) _menudisplay server_var(_keymenu_menudisplay)
+              es_keysetvalue _keymenu_created_menus server_var(_keymenu_menuname) _menureturn server_var(_keymenu_menureturn)
+              if (server_var(_keymenu_menudisplay) = "key") do
+              {
+                if (server_var(_keymenu_menureturn) = "key") do
+                {
+                  es_foreachkey _keymenu_tempkey in server_var(_keymenu_keygroup) "es_xdoblock keymenu/sql_insert_key"
+                }
+                else do
+                {
+                  es_foreachkey _keymenu_tempkey in server_var(_keymenu_keygroup) "es_xdoblock keymenu/sql_insert_ikey"
+                }
+                es_xformatqv _keymenu_query "SELECT COUNT(display) FROM _keymenu_list WHERE keymenu='%1'" _keymenu_menuname
+                es_sql queryvalue _keymenu_database _keymenu_pagecount server_var(_keymenu_query)
+                ifx true(_keymenu_pagecount) do
+                {
+                  if (server_var(_keymenu_pagecount) < 9) do
+                  {
+                    es_xset _keymenu_pagecount 1
+                  }
+                  else do
+                  {
+                    es_xmathparse _keymenu_pagecount "rint(((_keymenu_pagecount-8)/7)+1.4)"
+                  }
+                  es_xset _keymenu_insertquery 0
+                  es_xset _keymenu_currentpage 0
+                  es_xset _keymenu_limit 0
+                  while "server_var(_keymenu_currentpage) < server_var(_keymenu_pagecount)" "es_xdoblock keymenu/build_menu"
+                  es_sql query _keymenu_database server_var(_keymenu_insertquery)
+                }
+                else do
+                {
+                  es_xformatv _keymenu_format "keymenu: No keys or keyvalues found in %1" _keymenu_keygroup
+                  es_xdbgmsgv 0 _keymenu_format
+                }
+              }
+              else do
+              {
+                if (server_var(_keymenu_menureturn) = "key") do
+                {
+                  es_foreachkey _keymenu_tempkey in server_var(_keymenu_keygroup) "es_xdoblock keymenu/sql_insert_keyvalue"
+                }
+                else do
+                {
+                  es_foreachkey _keymenu_tempkey in server_var(_keymenu_keygroup) "es_xdoblock keymenu/sql_insert_ikeyvalue"
+                }
+                es_xformatqv _keymenu_query "SELECT COUNT(display) FROM _keymenu_list WHERE keymenu='%1'" _keymenu_menuname
+                es_sql queryvalue _keymenu_database _keymenu_pagecount server_var(_keymenu_query)
+                ifx true(_keymenu_pagecount) do
+                {
+                  if (server_var(_keymenu_pagecount) < 9) do
+                  {
+                    es_xset _keymenu_pagecount 1
+                  }
+                  else do
+                  {
+                    es_xmathparse _keymenu_pagecount "rint(((_keymenu_pagecount-8)/7)+1.4)"
+                  }
+                  es_xset _keymenu_insertquery 0
+                  es_xset _keymenu_currentpage 0
+                  es_xset _keymenu_limit 0
+                  while "server_var(_keymenu_currentpage) < server_var(_keymenu_pagecount)" "es_xdoblock keymenu/build_menu"
+                  es_sql query _keymenu_database server_var(_keymenu_insertquery)
+                }
+                else do
+                {
+                  es_xformatv _keymenu_format "keymenu: No keys or keyvalues found in %1" _keymenu_keygroup
+                  es_xdbgmsgv 0 _keymenu_format
+                }
+              }
+            }
+            else do
+            {
+              es_xformatv _keymenu_format "keymenu: Keymenu already exists: %1" _keymenu_menuname
+              es_xdbgmsgv 0 _keymenu_format
+            }
+            // ############### END KEYMENU/POPUP SETUP ###############
+          }
+          else do
+          {
+            // If # exists, but is not followed by "key" or "keyvalue", give error message and halt keymenu creation
+            es_xdbgmsg 0 keymenu: There must be 2 #key and/or #keyvalue in the commandstring.
+            es_xdbgmsg 0 keymenu: Your commandstring was:
+            es_xformatv _keymenu_format "           keymenu %1" _keymenu_args
+            es_xdbgmsgv 0 _keymenu_format
+          }
+        }
+        else do
+        {
+          // If there are not 2 #'s in the commandstring, give error message and halt keymenu creation
+          es_xdbgmsg 0 keymenu: There must be 2 #key and/or #keyvalue in the commandstring.
+          es_xdbgmsg 0 keymenu: Your commandstring was:
+          es_xformatv _keymenu_format "           keymenu %1" _keymenu_args
+          es_xdbgmsgv 0 _keymenu_format
+        }
+      }
+      else do
+      {
+        // If there are no #'s in the commandstring, give error message and halt keymenu creation
+        es_xdbgmsg 0 keymenu: No #key or #keyvalue found in the commandstring.
+        es_xdbgmsg 0 keymenu: Your commandstring was:
+        es_xformatv _keymenu_format "           keymenu %1" _keymenu_args
+        es_xdbgmsgv 0 _keymenu_format
+      }
+    }
+    else do
+    {
+      // If the keygroup they provided doesn't exist, give error message and halt keymenu creation
+      es_xformatv _keymenu_format "keymenu: The keygroup '%1' does not exist." _keymenu_keygroup
+      es_xdbgmsgv 0 _keymenu_format
+    }
+  }
+  else do
+  {
+    // If there are not enough arguments for keymenu, give error message and halt keymenu creation
+    es_xdbgmsg 0 keymenu: keymenu create <menu name> <return var> <script/block> <keygroup> <menu display> <menu return> "Menu Title Text:"
+  }
+}
+
+block sql_insert_key
+{
+  es_xformatqv _keymenu_query "INSERT INTO _keymenu_list (keymenu,display,return) VALUES('%1','%2','%2')" _keymenu_menuname _keymenu_tempkey
+  es_sql query _keymenu_database server_var(_keymenu_query)
+}
+
+block sql_insert_keyvalue
+{
+  es_keygetvalue _keymenu_stored_display server_var(_keymenu_keygroup) server_var(_keymenu_tempkey) server_var(_keymenu_menudisplay)
+  es_xformatqv _keymenu_query "INSERT INTO _keymenu_list (keymenu,display,return) VALUES('%1','%2','%3')" _keymenu_menuname _keymenu_stored_display _keymenu_tempkey
+  es_sql query _keymenu_database server_var(_keymenu_query)
+}
+
+block sql_insert_ikey
+{
+  es_keygetvalue _keymenu_stored_return server_var(_keymenu_keygroup) server_var(_keymenu_tempkey) server_var(_keymenu_menureturn)
+  es_xformatqv _keymenu_query "INSERT INTO _keymenu_list (keymenu,display,return) VALUES('%1','%2','%3')" _keymenu_menuname _keymenu_tempkey _keymenu_stored_return
+  es_sql query _keymenu_database server_var(_keymenu_query)
+}
+
+block sql_insert_ikeyvalue
+{
+  es_keygetvalue _keymenu_stored_display server_var(_keymenu_keygroup) server_var(_keymenu_tempkey) server_var(_keymenu_menudisplay)
+  es_xformatqv _keymenu_query "INSERT INTO _keymenu_list (keymenu,display,return) VALUES('%1','%2','%2')" _keymenu_menuname _keymenu_stored_display
+  es_sql query _keymenu_database server_var(_keymenu_query)
+}
+
+block build_menu
+{
+  es_xset _keymenu_addlinestring 0
+  es_xset _keymenu_keycount 0
+  es_xmath _keymenu_currentpage + 1
+  es_xformatv _keymenu_format "%1%2" _keymenu_menuname _keymenu_currentpage
+  ifx true(_keymenu_insertquery) do
+  {
+    es_formatv _keymenu_insertquery "%1;INSERT INTO _keymenu_list (keymenu,page_name) VALUES('%2','%3')" _keymenu_insertquery _keymenu_menuname _keymenu_format
+  }
+  else do
+  {
+    es_formatv _keymenu_insertquery "INSERT INTO _keymenu_list (keymenu,page_name) VALUES('%1','%2')" _keymenu_menuname _keymenu_format
+  }
+  if (server_var(_keymenu_currentpage) = 1) do
+  {
+    es_xformatqv _keymenu_query "SELECT display,return FROM _keymenu_list WHERE keymenu='%1' AND display<>'NULL' LIMIT 0, 8" _keymenu_menuname
+    es_sql query _keymenu_database _keymenu_menubuild server_var(_keymenu_query)
+    es popup create server_var(_keymenu_format)
+    es popup setvar server_var(_keymenu_format) _keymenu_menuname server_var(_keymenu_menuname)
+    es popup menuselectfb server_var(_keymenu_format) server_var(_keymenu_scriptblock)
+    if ("\n" notin server_var(_keymenu_titletext)) do
+    {
+      es_xformatv _keymenu_addlinestring "%1:      %2/%3\n-----------------------------" _keymenu_titletext _keymenu_currentpage _keymenu_pagecount
+    }
+    else do
+    {
+      es_token _keymenu_titletext_orig server_var(_keymenu_titletext) 1 \n
+      es_token _keymenu_titletext_desc server_var(_keymenu_titletext) 2 \n
+      es_xformatv _keymenu_addlinestring "%1:      %2/%3\n%4\n-----------------------------" _keymenu_titletext_orig _keymenu_currentpage _keymenu_pagecount _keymenu_titletext_desc
+    }
+    es_xforeachkey _keymenu_tmp in _keymenu_menubuild "es_xdoblock keymenu/add_to_popup"
+    es_xkeygroupdelete _keymenu_menubuild
+    if (server_var(_keymenu_currentpage) = server_var(_keymenu_pagecount)) do
+    {
+      if (server_var(_keymenu_keycount) < 8) do
+      {
+        es_xmathparse _keymenu_blanklines "8-_keymenu_keycount"
+        es_xset _keymenu_keycount 0
+        while "server_var(_keymenu_keycount) < server_var(_keymenu_blanklines)" "es_xmath _keymenu_keycount + 1;es_xformatv _keymenu_addlinestring %1\n%2 _keymenu_addlinestring _keymenu_space"
+      }
+    }
+    if (server_var(_keymenu_pagecount) > 1) do
+    {
+      es_xformatv _keymenu_addlinestring "%1\n-----------------------------\n->9. More\n0. Cancel" _keymenu_addlinestring
+      es popup addline server_var(_keymenu_format) server_var(_keymenu_addlinestring)
+      es_xmathparse _keymenu_nextmenu_number "_keymenu_currentpage+1"
+      es_xformatv _keymenu_submenu_format "%1%2" _keymenu_menuname _keymenu_nextmenu_number
+      es popup submenu server_var(_keymenu_format) 9 server_var(_keymenu_submenu_format)
+      es popup select server_var(_keymenu_format) 9 "keymenu/menu_dummy"
+      es popup select server_var(_keymenu_format) 10 "keymenu/menu_close"
+    }
+    else do
+    {
+      es_xformatv _keymenu_addlinestring "%1\n-----------------------------\n0. Cancel" _keymenu_addlinestring
+      es popup addline server_var(_keymenu_format) server_var(_keymenu_addlinestring)
+      es popup select server_var(_keymenu_format) 10 "keymenu/menu_close"
+    }
+  }
+  else do
+  {
+    if (server_var(_keymenu_currentpage) = 2) do
+    {
+      es_xmath _keymenu_limit + 8
+    }
+    else do
+    {
+      es_xmath _keymenu_limit + 7
+    }
+    es_xformatqv _keymenu_query "SELECT display,return FROM _keymenu_list WHERE keymenu='%1' AND display<>'NULL' LIMIT %2, 7" _keymenu_menuname _keymenu_limit
+    es_sql query _keymenu_database _keymenu_menubuild server_var(_keymenu_query)
+    es popup create server_var(_keymenu_format)
+    es popup setvar server_var(_keymenu_format) _keymenu_menuname server_var(_keymenu_menuname)
+    es popup menuselectfb server_var(_keymenu_format) server_var(_keymenu_scriptblock)
+    if ("\n" notin server_var(_keymenu_titletext)) do
+    {
+      es_xformatv _keymenu_addlinestring "%1:      %2/%3\n-----------------------------" _keymenu_titletext _keymenu_currentpage _keymenu_pagecount
+    }
+    else do
+    {
+      es_token _keymenu_titletext_orig server_var(_keymenu_titletext) 1 \n
+      es_token _keymenu_titletext_desc server_var(_keymenu_titletext) 2 \n
+      es_xformatv _keymenu_addlinestring "%1:      %2/%3\n%4\n-----------------------------" _keymenu_titletext_orig _keymenu_currentpage _keymenu_pagecount _keymenu_titletext_desc
+    }
+    es_xforeachkey _keymenu_tmp in _keymenu_menubuild "es_xdoblock keymenu/add_to_popup"
+    es_xkeygroupdelete _keymenu_menubuild
+    if (server_var(_keymenu_currentpage) = server_var(_keymenu_pagecount)) do
+    {
+      if (server_var(_keymenu_keycount) < 7) do
+      {
+        es_xmathparse _keymenu_blanklines "7-_keymenu_keycount"
+        es_xset _keymenu_keycount 0
+        while "server_var(_keymenu_keycount) <= server_var(_keymenu_blanklines)" "es_xmath _keymenu_keycount + 1;es_xformatv _keymenu_addlinestring %1\n%2 _keymenu_addlinestring _keymenu_space"
+      }
+      es_xformatv _keymenu_addlinestring "%1\n-----------------------------\n->8. Back\n0. Cancel" _keymenu_addlinestring
+      es popup addline server_var(_keymenu_format) server_var(_keymenu_addlinestring)
+      es_xmathparse _keymenu_nextmenu_number "_keymenu_currentpage-1"
+      es_xformatv _keymenu_submenu_format "%1%2" _keymenu_menuname _keymenu_nextmenu_number
+      es popup submenu server_var(_keymenu_format) 8 server_var(_keymenu_submenu_format)
+      es popup select server_var(_keymenu_format) 8 "keymenu/menu_dummy"
+      es popup select server_var(_keymenu_format) 9 "keymenu/menu_close"
+      es popup select server_var(_keymenu_format) 10 "keymenu/menu_close"
+    }
+    else do
+    {
+      es_xformatv _keymenu_addlinestring "%1\n-----------------------------\n->8. Back\n->9. More\n0. Cancel" _keymenu_addlinestring
+      es popup addline server_var(_keymenu_format) server_var(_keymenu_addlinestring)
+      es_xmathparse _keymenu_nextmenu_number "_keymenu_currentpage-1"
+      es_xformatv _keymenu_submenu_format "%1%2" _keymenu_menuname _keymenu_nextmenu_number
+      es popup submenu server_var(_keymenu_format) 8 server_var(_keymenu_submenu_format)
+      es_xmathparse _keymenu_nextmenu_number "_keymenu_currentpage+1"
+      es_xformatv _keymenu_submenu_format "%1%2" _keymenu_menuname _keymenu_nextmenu_number
+      es popup submenu server_var(_keymenu_format) 9 server_var(_keymenu_submenu_format)
+      es popup select server_var(_keymenu_format) 8 "keymenu/menu_dummy"
+      es popup select server_var(_keymenu_format) 9 "keymenu/menu_dummy"
+      es popup select server_var(_keymenu_format) 10 "keymenu/menu_close"
+    }
+  }
+}
+
+block add_to_popup
+{
+  es_xmath _keymenu_keycount + 1
+  es_keygetvalue _keymenu_stored_display _keymenu_menubuild server_var(_keymenu_tmp) display
+  es_keygetvalue _keymenu_stored_return _keymenu_menubuild server_var(_keymenu_tmp) return
+  es_xformatv _keymenu_addlinestring "%1\n->%2. %3" _keymenu_addlinestring _keymenu_tmp _keymenu_stored_display
+  es popup menuvalue server_var(_keymenu_format) server_var(_keymenu_returnvar) server_var(_keymenu_tmp) server_var(_keymenu_stored_return)
+}
+
+// keymenu delete <menu name>
+block delete
+{
+  es_xgetargc _keymenu_argc
+  if (server_var(_keymenu_argc) = 3) do
+  {
+    es_xgetargv _keymenu_menuname 2
+    es_exists _keymenu_exists key _keymenu_created_menus server_var(_keymenu_menuname)
+    ifx true(_keymenu_exists) do
+    {
+      es_xformatqv _keymenu_query "SELECT page_name FROM _keymenu_list WHERE keymenu='%1' AND page_name<>'NULL'" _keymenu_menuname
+      es_sql query _keymenu_database _keymenu_delete server_var(_keymenu_query)
+      es_xforeachkey _keymenu_tempkey in _keymenu_delete "es_xdoblock keymenu/delete_loop"
+      es_xkeygroupdelete _keymenu_delete
+      es_keydelete _keymenu_created_menus server_var(_keymenu_menuname)
+      es_xformatqv _keymenu_query "DELETE FROM _keymenu_list WHERE keymenu='%1'" _keymenu_menuname
+      es_sql query _keymenu_database server_var(_keymenu_query)
+    }
+    else do
+    {
+      es_xformatv _keymenu_format "keymenu: Unable to delete the keymenu '%1' - '%1' does not exist" _keymenu_menuname
+      es_xdbgmsgv 0 _keymenu_format
+    }
+  }
+  else do
+  {
+    es_xdbgmsg 0 keymenu: keymenu delete <menu name>
+  }
+}
+
+block delete_loop
+{
+  es_keygetvalue _keymenu_format _keymenu_delete server_var(_keymenu_tempkey) page_name
+  es popup unsendname server_var(_keymenu_format) #all
+  es popup delete server_var(_keymenu_format)
+}
+
+// keymenu send <menu name> <userid> [page]
+block send
+{
+  es_xgetargc _keymenu_argc
+  if (server_var(_keymenu_argc) > 2) do
+  {
+    if (server_var(_keymenu_argc) < 6) do
+    {
+      es_xgetargv _keymenu_menuname 2
+      es_exists _keymenu_exists key _keymenu_created_menus server_var(_keymenu_menuname)
+      ifx true(_keymenu_exists) do
+      {
+        es_xgetargv _keymenu_userid 3
+        es_exists _keymenu_exists userid server_var(_keymenu_userid)
+        ifx true(_keymenu_exists) do
+        {
+          if (server_var(_keymenu_argc) = 4) do
+          {
+            es_xformatv _keymenu_format "%11" _keymenu_menuname
+            es popup send server_var(_keymenu_format) server_var(_keymenu_userid)
+          }
+          else do
+          {
+            es_xgetargv _keymenu_page 4
+            es_xformatv _keymenu_format "%1%2" _keymenu_menuname _keymenu_page
+            es popup send server_var(_keymenu_format) server_var(_keymenu_userid)
+          }
+        }
+        else do
+        {
+          es_xformatv _keymenu_format "keymenu: The specified userid '%1' does not exist. Unable to send the keymenu '%2'" _keymenu_userid _keymenu_menuname
+          es_xdbgmsgv 0 _keymenu_format
+        }
+      }
+      else do
+      {
+        es_xformatv _keymenu_format "keymenu: The specified keymenu '%1' does not exist. Unable to send the keymenu '%1'" _keymenu_menuname
+        es_xdbgmsgv 0 _keymenu_format
+      }
+    }
+    else do
+    {
+      es_xdbgmsg 0 keymenu: keymenu send <menu name> [page number]
+    }
+  }
+  else do
+  {
+    es_xdbgmsg 0 keymenu: keymenu send <menu name> [page number]
+  }
+}
+
+//keymenu getpages <var> <menu name>
+block getpages
+{
+  es_xgetargc _keymenu_argc
+  if (server_var(_keymenu_argc) = 4) do
+  {
+    es_xgetargv _keymenu_menuname 3
+    es_exists _keymenu_exists key _keymenu_created_menus server_var(_keymenu_menuname)
+    ifx true(_keymenu_exists) do
+    {
+      es_xgetargv _keymenu_returnvar 2
+      es_exists _keymenu_exists variable server_var(_keymenu_returnvar)
+      ifx false(_keymenu_exists) do
+      {
+        es_set server_var(_keymenu_returnvar) 0
+      }
+      es_xformatqv _keymenu_query "SELECT COUNT(page_name) FROM _keymenu_list WHERE keymenu='%1'" _keymenu_menuname
+      es_sql queryvalue _keymenu_database server_var(_keymenu_returnvar) server_var(_keymenu_query)
+    }
+    else do
+    {
+      es_xformatv _keymenu_format "keymenu: The specified keymenu '%1' does not exist. Unable to retrieve the number of pages." _keymenu_menuname
+      es_xdbgmsgv 0 _keymenu_format
+    }
+  }
+  else do
+  {
+    es_xdbgmsg 0 keymenu: keymenu getpages <var> <menu name>
+  }
+}
+
+//keymenu exists <var> <menu name>
+block exists
+{
+  es_xgetargc _keymenu_argc
+  if (server_var(_keymenu_argc) = 4) do
+  {
+    es_xgetargv _keymenu_returnvar 2
+    es_exists _keymenu_exists variable server_var(_keymenu_returnvar)
+    ifx false(_keymenu_exists) do
+    {
+      es_set server_var(_keymenu_returnvar) 0
+    }
+    es_xgetargv _keymenu_menuname 3
+    es_exists _keymenu_exists key _keymenu_created_menus server_var(_keymenu_menuname)
+    ifx true(_keymenu_exists) do
+    {
+      es_set server_var(_keymenu_returnvar) 1
+    }
+    else do
+    {
+      es_set server_var(_keymenu_returnvar) 0
+    }
+  }
+  else do
+  {
+    es_xdbgmsg keymenu: keymenu exists <var> <menu name>
+  }
+}
+
+//keymenu changeblock <menu name> <script/block>
+block changeblock
+{
+  es_xgetargc _keymenu_argc
+  if (server_var(_keymenu_argc) = 4) do
+  {
+    es_xgetargv _keymenu_menuname 2
+    es_exists _keymenu_exists key _keymenu_created_menus server_var(_keymenu_menuname)
+    ifx true(_keymenu_exists) do
+    {
+      es_xgetargv _keymenu_scriptblock 3
+      es_exists _keymenu_exists block server_var(_keymenu_scriptblock)
+      ifx true(_keymenu_exists) do
+      {
+        es_xformatqv _keymenu_query "SELECT page_name FROM _keymenu_list WHERE keymenu='%1' AND page_name<>'NULL'" _keymenu_menuname
+        es_sql query _keymenu_database _keymenu_test server_var(_keymenu_query)
+        es_xforeachkey _keymenu_tempkey in _keymenu_test "es_keygetvalue _keymenu_menuname _keymenu_test server_var(_keymenu_tempkey) page_name;es popup menuselectfb server_var(_keymenu_menuname) server_var(_keymenu_scriptblock)"
+        es_xkeygroupdelete _keymenu_test
+      }
+      else do
+      {
+        es_xformatv _keymenu_format "keymenu: The specified block '%1' does not exist. Unable to change the executed block." _keymenu_scriptblock
+        es_xdbgmsgv 0 _keymenu_format
+      }
+    }
+    else do
+    {
+      es_xformatv _keymenu_format "keymenu: The specified keymenu '%1' does not exist. Unable to change the executed block." _keymenu_menuname
+      es_xdbgmsgv 0 _keymenu_format
+    }
+  }
+  else do
+  {
+    es_xdbgmsg keymenu: keymenu changeblock <menu name> <script/block>
+  }
+}
+
+//keymenu setvar <menu name> <menu var> <menu value>
+block setvar
+{
+  es_xgetargc _keymenu_argc
+  if (server_var(_keymenu_argc) = 5) do
+  {
+    es_xgetargv _keymenu_menuname 2
+    es_exists _keymenu_exists key _keymenu_created_menus server_var(_keymenu_menuname)
+    ifx true(_keymenu_exists) do
+    {
+      es_xgetargv _keymenu_intern_var 3
+      ifx true(_keymenu_intern_var) do
+      {
+        es_xgetargv _keymenu_intern_value 4
+        es_xformatv _keymenu_intern_var "__var_%1" _keymenu_intern_var
+        es_keysetvalue _keymenu_created_menus server_var(_keymenu_menuname) server_var(_keymenu_intern_var) server_var(_keymenu_intern_value)
+      }
+      else do
+      {
+        es_xformatv _keymenu_format "keymenu: You have to specify a variable name. Unable to set the variable."
+        es_xdbgmsgv 0 _keymenu_format
+      }
+    }
+    else do
+    {
+      es_xformatv _keymenu_format "keymenu: The specified keymenu '%1' does not exist. Unable to set a back menu." _keymenu_menuname
+      es_xdbgmsgv 0 _keymenu_format
+    }
+  }
+  else do
+  {
+    es_xdbgmsg keymenu: keymenu setvar <menu name> <menu var> <menu value>
+  }
+}
+
+//keymenu getvar <menu name> <var> <menu var>
+block getvar
+{
+  es_xgetargc _keymenu_argc
+  if (server_var(_keymenu_argc) = 5) do
+  {
+    es_xgetargv _keymenu_menuname 2
+    es_exists _keymenu_exists key _keymenu_created_menus server_var(_keymenu_menuname)
+    ifx true(_keymenu_exists) do
+    {
+      es_xgetargv _keymenu_returnvar 3
+      es_exists _keymenu_exists variable server_var(_keymenu_returnvar)
+      ifx false(_keymenu_exists) do
+      {
+        es_set server_var(_keymenu_returnvar) 0
+      }
+      es_xgetargv _keymenu_intern_var 4
+      ifx true(_keymenu_intern_var) do
+      {
+        es_xformatv _keymenu_intern_var "__var_%1" _keymenu_intern_var
+        es_exists _keymenu_exists keyvalue _keymenu_created_menus server_var(_keymenu_menuname) server_var(_keymenu_intern_var)
+        ifx true(_keymenu_exists) do
+        {
+          es_keygetvalue server_var(_keymenu_returnvar) _keymenu_created_menus server_var(_keymenu_menuname) server_var(_keymenu_intern_var)
+        }
+        else do
+        {
+          es_xformatv _keymenu_format "keymenu: The keymenu variable '%1' does not exists. Unable to set the variable." _keymenu_intern_var
+          es_xdbgmsgv 0 _keymenu_format
+        }
+      }
+      else do
+      {
+        es_xformatv _keymenu_format "keymenu: You have to specify a variable name. Unable to get the variable."
+        es_xdbgmsgv 0 _keymenu_format
+      }
+    }
+    else do
+    {
+      es_xformatv _keymenu_format "keymenu: The specified keymenu '%1' does not exist. Unable to set a back menu." _keymenu_menuname
+      es_xdbgmsgv 0 _keymenu_format
+    }
+  }
+  else do
+  {
+    es_xdbgmsg keymenu: keymenu setvar <menu name> <var> <value>
+  }
+}
+
+//keymenu backmenu <menu name> <keymenu/popup>
+block backmenu
+{
+  es_xgetargc _keymenu_argc
+  if (server_var(_keymenu_argc) = 4) do
+  {
+    es_xgetargv _keymenu_menuname 2
+    es_exists _keymenu_exists key _keymenu_created_menus server_var(_keymenu_menuname)
+    ifx true(_keymenu_exists) do
+    {
+      es_xgetargv _keymenu_backmenu 3
+      ifx true(_keymenu_backmenu) do
+      {
+        es popup exists server_var(_keymenu_backmenu) _keymenu_exists
+        ifx true(_keymenu_exists) do
+        {
+          es_xformatv _keymenu_backmenu "popup#%1" _keymenu_backmenu
+          es_keysetvalue _keymenu_created_menus server_var(_keymenu_menuname) _backmenu server_var(_keymenu_backmenu)
+        }
+        else do
+        {
+          es_exists _keymenu_exists key _keymenu_created_menus server_var(_keymenu_backmenu)
+          ifx true(_keymenu_exists) do
+          {
+            es_xformatv _keymenu_backmenu "keymenu#%1" _keymenu_backmenu
+            es_keysetvalue _keymenu_created_menus server_var(_keymenu_menuname) _backmenu server_var(_keymenu_backmenu)
+          }
+          else do
+          {
+            es_xformatv _keymenu_format "keymenu: The specified popup or keymenu '%1' does not exist. Unable to set a back menu." _keymenu_backmenu
+            es_xdbgmsgv 0 _keymenu_format
+          }
+        }
+      }
+      else do
+      {
+        es_keysetvalue _keymenu_created_menus server_var(_keymenu_menuname) _backmenu 0
+      }
+    }
+    else do
+    {
+      es_xformatv _keymenu_format "keymenu: The specified keymenu '%1' does not exist. Unable to set a back menu." _keymenu_menuname
+      es_xdbgmsgv 0 _keymenu_format
+    }
+  }
+  else do
+  {
+    es_xdbgmsg keymenu: keymenu backmenu <menu name> <keymenu/popup>
+  }
+}
+
+//keymenu getmenuname <var> <popup-name>
+block getmenuname
+{
+  es_xgetargc _keymenu_argc
+  if (server_var(_keymenu_argc) = 4) do
+  {
+    es_xgetargv _keymenu_returnvar 2
+    es_exists _keymenu_exists variable server_var(_keymenu_returnvar)
+    ifx false(_keymenu_exists) do
+    {
+      es_set server_var(_keymenu_returnvar) 0
+    }
+    es_xgetargv _keymenu_othermenu 3
+    ifx true(_keymenu_othermenu) do
+    {
+      es popup exists server_var(_keymenu_othermenu) _keymenu_exists
+      ifx true(_keymenu_exists) do
+      {
+        es_xset _keymenu_menuname 0
+        es popup getvar server_var(_keymenu_othermenu) _keymenu_menuname _keymenu_menuname
+        ifx true(_keymenu_menuname) do
+        {
+          es_copy server_var(_keymenu_returnvar) _keymenu_menuname
+        }
+        else do
+        {
+          es_xformatv _keymenu_format "keymenu: The specified popup '%1' is not part of a keymenu." _keymenu_othermenu
+          es_xdbgmsgv 0 _keymenu_format
+        }
+      }
+      else do
+      {
+        es_xformatv _keymenu_format "keymenu: The specified popup '%1' does not exists." _keymenu_othermenu
+        es_xdbgmsgv 0 _keymenu_format
+      }
+    }
+    else do
+    {
+      es_xformatv _keymenu_format "keymenu: You have to specify a popup."
+      es_xdbgmsgv 0 _keymenu_format
+    }
+  }
+  else do
+  {
+    es_xdbgmsg keymenu: keymenu getmenuname <var> <popup-name>
+  }
+}
+
+//keymenu update <menu name> [keygroup]
+block update
+{
+  if (server_var(_keymenu_argc) >= 3) do
+  {
+    // ############### START KEYMENU/POPUP SETUP ###############
+    // Check to see if the "keymenu/popup" exists. If not, allow it to be created.
+    es_xgetargv _keymenu_menuname 2
+    es_exists _keymenu_exists key _keymenu_created_menus server_var(_keymenu_menuname)
+    ifx true(_keymenu_exists) do
+    {
+      // Get the old keymenu setup
+      es_xgetargv _keymenu_keygroup 3
+      ifx false(_keymenu_keygroup) do
+      {
+        es_keygetvalue _keymenu_keygroup _keymenu_created_menus server_var(_keymenu_menuname) _keygroup
+      }
+      es_keygetvalue _keymenu_scriptblock _keymenu_created_menus server_var(_keymenu_menuname) _scriptblock
+      es_keygetvalue _keymenu_returnvar _keymenu_created_menus server_var(_keymenu_menuname) _returnvar
+      es_keygetvalue _keymenu_titletext _keymenu_created_menus server_var(_keymenu_menuname) _titletext
+      es_keygetvalue _keymenu_menudisplay _keymenu_created_menus server_var(_keymenu_menuname) _menudisplay
+      es_keygetvalue _keymenu_menureturn _keymenu_created_menus server_var(_keymenu_menuname) _menureturn
+      es_xformatqv _keymenu_query "DELETE FROM _keymenu_list WHERE keymenu='%1'" _keymenu_menuname
+      es_sql query _keymenu_database server_var(_keymenu_query)
+      if (server_var(_keymenu_menudisplay) = "key") do
+      {
+        if (server_var(_keymenu_menureturn) = "key") do
+        {
+          es_foreachkey _keymenu_tempkey in server_var(_keymenu_keygroup) "es_xdoblock keymenu/sql_insert_key"
+        }
+        else do
+        {
+          es_foreachkey _keymenu_tempkey in server_var(_keymenu_keygroup) "es_xdoblock keymenu/sql_insert_ikey"
+        }
+        es_xformatqv _keymenu_query "SELECT COUNT(display) FROM _keymenu_list WHERE keymenu='%1'" _keymenu_menuname
+        es_sql queryvalue _keymenu_database _keymenu_pagecount server_var(_keymenu_query)
+        ifx true(_keymenu_pagecount) do
+        {
+          if (server_var(_keymenu_pagecount) < 9) do
+          {
+            es_xset _keymenu_pagecount 1
+          }
+          else do
+          {
+            es_xmathparse _keymenu_pagecount "rint(((_keymenu_pagecount-8)/7)+1.4)"
+          }
+          es_xset _keymenu_insertquery 0
+          es_xset _keymenu_currentpage 0
+          es_xset _keymenu_limit 0
+          while "server_var(_keymenu_currentpage) < server_var(_keymenu_pagecount)" "es_xdoblock keymenu/build_menu"
+          es_sql query _keymenu_database server_var(_keymenu_insertquery)
+        }
+        else do
+        {
+          es_xformatv _keymenu_format "keymenu: No keys or keyvalues found in %1" _keymenu_keygroup
+          es_xdbgmsgv 0 _keymenu_format
+        }
+      }
+      else do
+      {
+        if (server_var(_keymenu_menureturn) = "key") do
+        {
+          es_foreachkey _keymenu_tempkey in server_var(_keymenu_keygroup) "es_xdoblock keymenu/sql_insert_keyvalue"
+        }
+        else do
+        {
+          es_foreachkey _keymenu_tempkey in server_var(_keymenu_keygroup) "es_xdoblock keymenu/sql_insert_ikeyvalue"
+        }
+        es_xformatqv _keymenu_query "SELECT COUNT(display) FROM _keymenu_list WHERE keymenu='%1'" _keymenu_menuname
+        es_sql queryvalue _keymenu_database _keymenu_pagecount server_var(_keymenu_query)
+        ifx true(_keymenu_pagecount) do
+        {
+          if (server_var(_keymenu_pagecount) < 9) do
+          {
+            es_xset _keymenu_pagecount 1
+          }
+          else do
+          {
+            es_xmathparse _keymenu_pagecount "rint(((_keymenu_pagecount-8)/7)+1.4)"
+          }
+          es_xset _keymenu_insertquery 0
+          es_xset _keymenu_currentpage 0
+          es_xset _keymenu_limit 0
+          while "server_var(_keymenu_currentpage) < server_var(_keymenu_pagecount)" "es_xdoblock keymenu/build_menu"
+          es_sql query _keymenu_database server_var(_keymenu_insertquery)
+        }
+        else do
+        {
+          es_xformatv _keymenu_format "keymenu: No keys or keyvalues found in %1" _keymenu_keygroup
+          es_xdbgmsgv 0 _keymenu_format
+        }
+      }
+    }
+    else do
+    {
+      es_xformatv _keymenu_format "keymenu: Keymenu does not exists: %1" _keymenu_menuname
+      es_xdbgmsgv 0 _keymenu_format
+    }
+    // ############### END KEYMENU/POPUP SETUP ###############
+  }
+  else do
+  {
+    // If there are not enough arguments for keymenu, give error message and halt keymenu creation
+    es_xdbgmsg 0 keymenu: keymenu update <menu name> [keygroup]
+  }
+}
+
+block menu_close
+{
+  // handling 0. Cancel popup/keymenu
+  es popup exists server_var(_popup_name) _keymenu_exists
+  ifx true(_keymenu_exists) do
+  {
+    es_xset _keymenu_menuname 0
+    es popup getvar server_var(_popup_name) _keymenu_menuname _keymenu_menuname
+    ifx true(_keymenu_menuname) do
+    {
+      es_keygetvalue _keymenu_backmenu _keymenu_created_menus server_var(_keymenu_menuname) _backmenu
+      ifx true(_keymenu_backmenu) do
+      {
+        if ("popup#" in server_var(_keymenu_backmenu)) do
+        {
+          es_xstring _keymenu_backmenu replace "popup#"
+          es popup exists server_var(_keymenu_backmenu) _keymenu_exists
+          ifx true(_keymenu_exists) do
+          {
+            es popup send server_var(_keymenu_backmenu) server_var(_popup_userid)
+          }
+        }
+        else do
+        {
+          if ("keymenu#" in server_var(_keymenu_backmenu)) do
+          {
+            es_xstring _keymenu_backmenu replace "keymenu#"
+            es_exists _keymenu_exists key _keymenu_created_menus server_var(_keymenu_backmenu)
+            ifx true(_keymenu_exists) do
+            {
+              es keymenu send server_var(_keymenu_backmenu) server_var(_popup_userid)
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+block menu_dummy
+{
+  // nothing - needed for 8. Back, 9. Next and 0. Cancel
+}

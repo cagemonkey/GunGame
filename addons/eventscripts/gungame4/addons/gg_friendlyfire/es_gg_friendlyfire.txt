@@ -1,0 +1,33 @@
+// Auto Friendly Fire Addon
+// (c)2007 by GunGame Coding Team (cagemonkey,XE_Manup)
+//
+
+block load
+{
+    // Init vars
+    es_xset ff_max_lvl 0
+    es_xset ff_leader_lvl 0
+    
+    gg_getmaxlevel ff_max_lvl
+    es_math ff_max_lvl - server_var(gg_auto_ff)
+}
+
+event round_start
+{
+    gg_getmaxlevel ff_max_lvl
+    es_math ff_max_lvl - server_var(gg_auto_ff)
+}
+
+event gg_levelup
+{
+    gg_getleaderlevel ff_leader_lvl
+    if (server_var(ff_leader_lvl) == server_var(ff_max_lvl)) do
+    {
+        if (server_var(mp_friendlyfire) == 0) do
+        {
+            mp_friendlyfire 1
+            es_xmsg Friendly Fire is ON!!!  Watch your fire!
+            es_xcexec_all play npc/roller/mine/rmine_tossed1.wav
+        }
+    }
+}

@@ -1,0 +1,53 @@
+// GunGame commands menu
+// (c)2007 by GunGame Coding Team (cagemonkey,XE_Manup)
+
+block load
+{
+   es_xexists gg_exists script gungame4/gg_css_dm
+   ifx false(gg_exists) do
+   {
+      gg_popup create gg_commands
+      gg_popup addline gg_commands "GunGame Chat Commands:"
+      gg_popup addline gg_commands "-----------------------------"
+      gg_popup addline gg_commands "->1. !level"
+      gg_popup addline gg_commands "    * see your current level and who is winning"
+      gg_popup addline gg_commands "->2. !weapons"
+      gg_popup addline gg_commands "    * see the weapon order"
+      gg_popup addline gg_commands "->3. !score"
+      gg_popup addline gg_commands "    * see all players' current scores"
+      gg_popup addline gg_commands "->4. !top"
+      gg_popup addline gg_commands "    * see the top 100 winners on the server"
+      gg_popup addline gg_commands "->5. !rules"
+      gg_popup addline gg_commands "    * see the rules on how to play GunGame"
+      gg_popup addline gg_commands "-----------------------------"
+      gg_popup addline gg_commands "0. Cancel"
+      gg_popup setvalidkeys gg_commands "0"
+      gg_popup cache gg_commands
+   }
+   else do
+   {
+      gg_popup create gg_commands
+      gg_popup addline gg_commands "GunGame DeathMatch Chat Commands:"
+      gg_popup addline gg_commands "---------------------------------"
+      gg_popup addline gg_commands "->1. !level"
+      gg_popup addline gg_commands "    * see your current level and who is winning"
+      gg_popup addline gg_commands "->2. !weapons"
+      gg_popup addline gg_commands "    * see the weapon order"
+      gg_popup addline gg_commands "->3. !score"
+      gg_popup addline gg_commands "    * see all players' current scores"
+      gg_popup addline gg_commands "->4. !stuck"
+      gg_popup addline gg_commands "    * if you get stuck to another player"
+      gg_popup addline gg_commands "->5. !auto"
+      gg_popup addline gg_commands "    * turn Auto Give on/off"
+      gg_popup addline gg_commands "->6. !top"
+      gg_popup addline gg_commands "    * see the top 100 winners on the server"
+      gg_popup addline gg_commands "->7. !rules"
+      gg_popup addline gg_commands "    * see the rules on how to play GunGame"
+      gg_popup addline gg_commands "---------------------------------"
+      gg_popup addline gg_commands "0. Cancel"
+      gg_popup setvalidkeys gg_commands "0"
+      gg_popup cache gg_commands
+   }
+   es_xsoon es_xunload gungame4/menus/commands_menu
+   //es_cexec event_var(userid) echo Say ??? if you do not receive your weapon. (Deathmatch ONLY)
+}
