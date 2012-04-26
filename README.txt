@@ -1,49 +1,43 @@
-Requirements:
-Mattie's Eventscripts v1.3+ (download)
-	Go to http://www.eventscripts.com/pages/EventScriptsGuide for help installing
-	Eventscripts.
-ES_Tools v0.417a+
-	This is only required to run the Deathmatch Addon
-Mani's Admin Plugin (optional, only used for map voting)
-	Recommended Mani Settings:
+## Requirements: ##
+*********************************************************************
+Eventscripts v1.5.0.171a+
+ES_Tools 0.417a+
 
-		// 0 = calculate once per map, 1 = calculate at end of each round (CSS Only)
-		mani_stats_mode 0
-		
-		// This defines whether the tk freeze bomb option can be used or not
-		mani_tk_allow_freeze_bomb_option 0
-		
-		// Allow voting 1 = on, 0 = off (this cvar controls ALL voting)
-		mani_voting 1
-		
-		// 1 = enable cheat detection
-		// 0 = disable cheat detection
-		// This is recommended by Mani to be disabled, since Valve updated the VAC
-		// to catch these.
-		mani_protect_against_cheat_cvars 0
-		
-		// 0 = No warmup time on map load
-		// Greater than 0 = number of seconds after map load until map restarts and
-		// play continues as normal.
-		mani_warmup_timer 0
-________________________________________________________________________________
-Installation:
-Unzip the contents into your cstrike directory.
-Edit es_gungame3.txt config section at the top of the file.
-Save it as /cstrike/addons/eventscripts/gungame3/es_gungame3.txt on your server
-Edit es_gg_votemaps_db.txt in the gg_voting subdirectory if you want to use
-Eventscripts for map voting or a mapcycle file. This is experimental ONLY.
-Be sure the gungame3 directory and subdirectories are NOT set to READ-ONLY or
-your winner and top10 databases will not work.
 
-Sample autoexec.cfg:
 
-mani_reverse_admin_flags 0 // Set the option to reverse the meaning of the admin
-flags set in adminlist.txt
-mani_reverse_immunity_flags 0 // Set the option to reverse the meaning of the
-immunity flags set in immunitylist.txt
+## Installation: ##
+*********************************************************************
+1) Make sure your server meets the requirements posted above first.
+   If you do not have the requirements met, you will experience
+   problems.
 
-mattie_eventscripts 1
-eventscripts_subdirectory events
+2) Download and unzip the GunGame 4 zip file
 
-es_load gungame3
+3) Edit the config file for your language located in the cfg/gungame
+   directory.
+   a. If you want to use the ggmaplist.txt for voting, you should edit
+      that file.
+   b. If you want to use the web stats option available in the
+      config, edit the included gg4win.php script and place it on
+      your web server.
+
+4) Upload all files to your cstrike directory on your game server
+   overwriting any existing files. This zip contains some bug fixes
+   to a couple of corelib scripts that were included with
+   Eventscripts.
+
+5) Add
+     es_load gungame4
+   to your autoexec.cfg file.
+   a. If you want to run the spawnpoint converter to use version 3.4
+      spawnpoints in the version 4 Deathmatch addon, then add
+        es_load gungame4/addons/gg_converter
+      to your autoexec.cfg
+
+6) Restart your server
+
+Note: 
+You should restart your server if you want to run version 4 and you
+were previously running version 3.
+You might get some erratic behavior if you try to just unload version
+3 and load version 4 without restarting. 
